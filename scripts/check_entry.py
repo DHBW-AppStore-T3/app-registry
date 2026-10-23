@@ -52,7 +52,7 @@ def fetch(url: str, headers: dict[str, str] | None = None, method: str = "GET") 
         with urllib.request.urlopen(req, timeout=20) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as e:
-        return e.code, b""
+        return e.code, e.read()
     except (urllib.error.URLError, OSError) as e:
         return 0, str(e).encode()
 
@@ -63,16 +63,26 @@ def gh(path: str, raw: bool = False) -> tuple[int, object]:
         headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
     code, body = fetch(f"https://api.github.com/{path}", headers)
     if code != 200:
-        return code, body.decode(errors="replace") if code == 0 else None
+        return code, api_message(body)
     return code, body.decode("utf-8") if raw else json.loads(body)
+
+
+def api_message(body: bytes) -> str | None:
+    """The ``message`` of a GitHub API error body, or the raw text (shortened)."""
+    text = body.decode(errors="replace").strip()
+    try:
+        return str(json.loads(text).get("message") or "")[:200] or None
+    except (ValueError, AttributeError):
+        return text[:200] or None
 
 
 def http_problem(code: int, detail: object) -> str:
     if code == 0:
         return f"request failed ({detail})"
+    extra = f": {detail}" if detail else ""
     if code in (403, 429):
-        return f"HTTP {code} (GitHub rate limit or no access; set GITHUB_TOKEN)"
-    return f"HTTP {code}"
+        return f"HTTP {code}{extra} (rate limit or no access; set GITHUB_TOKEN)"
+    return f"HTTP {code}{extra}"
 
 
 def image_pullable(image: str) -> str | None:
@@ -82,7 +92,7 @@ def image_pullable(image: str) -> str | None:
     code, body = fetch(f"https://ghcr.io/token?service=ghcr.io&scope={urllib.parse.quote(f'repository:{repo}:pull')}")
     token = json.loads(body).get("token") if code == 200 else None
     if not token:
-        return f"no anonymous token for {repo} ({http_problem(code, body)})"
+        return f"no anonymous token for {repo} ({http_problem(code, api_message(body))})"
     code, detail = fetch(f"https://ghcr.io/v2/{repo}/manifests/{digest}",
                          {"Authorization": f"Bearer {token}", "Accept": MANIFEST_ACCEPT}, method="HEAD")
     if code == 200:
@@ -91,7 +101,7 @@ def image_pullable(image: str) -> str | None:
         return "not pullable without credentials: set the package to Public (Package settings -> Change visibility)"
     if code == 404:
         return "digest not found in the registry"
-    return http_problem(code, detail)
+    return http_problem(code, api_message(detail))
 
 
 def latest_tag(owner_repo: str) -> str | None:
