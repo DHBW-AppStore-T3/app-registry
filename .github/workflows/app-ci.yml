@@ -164,6 +164,8 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          # Links the ghcr.io package to this repo: without it a later push with GITHUB_TOKEN is refused.
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=${{ steps.meta.outputs.key }}
           provenance: false
 
