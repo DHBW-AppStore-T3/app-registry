@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       app-name:
-        description: "Image-Name unter ghcr.io/dhbw-appstore-t3/ (Default: Repo-Name in Kleinbuchstaben)"
+        description: "Image-Name unter ghcr.io/dhbw-appstore-t3/apps/ (Default: Repo-Name in Kleinbuchstaben)"
         type: string
         default: ""
       images:
@@ -33,13 +33,13 @@ on:
         default: true
     outputs:
       digest:
-        description: "Digest des ersten Images (sha256:...)"
+        description: "Digest des (alphabetisch) ersten Images, bei einem Image dieses (sha256:...)"
         value: ${{ jobs.collect.outputs.digest }}
       digests:
         description: "JSON-Objekt image-ref -> digest fuer alle Images"
         value: ${{ jobs.collect.outputs.digests }}
       image:
-        description: "Vollstaendige Referenz des ersten Images: ghcr.io/...@sha256:..."
+        description: "Vollstaendige Referenz des (alphabetisch) ersten Images: ghcr.io/...@sha256:..."
         value: ${{ jobs.collect.outputs.image }}
 
 permissions:
@@ -47,20 +47,21 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  ORG: dhbw-appstore-t3
+  # App-Images liegen unter apps/, getrennt von den Plattform-Images (backend, worker, frontend).
+  ORG: dhbw-appstore-t3/apps
 
 jobs:
   validate:
     name: appstore.yaml validieren
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: DHBW-AppStore-T3/app-registry
           ref: main
           path: .app-registry
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml
@@ -82,8 +83,8 @@ jobs:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: actions/checkout@v7
+      - uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: ${{ matrix.image.dockerfile }}
           failure-threshold: warning
@@ -100,7 +101,7 @@ jobs:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Image-Namen berechnen
         id: meta
@@ -124,10 +125,10 @@ jobs:
           [ "$IS_MAIN" = "true" ] && tags="$tags"$'\n'"$image:latest"
           { echo "tags<<EOF"; echo "$tags"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build (lokal, fuer den Scan)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.image.context }}
           file: ${{ matrix.image.dockerfile }}
@@ -138,7 +139,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ steps.meta.outputs.key }}
 
       - name: Trivy-Scan (behebbare HIGH/CRITICAL brechen den Build)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: scan-target:${{ github.sha }}
           severity: ${{ inputs.trivy-severity }}
@@ -148,7 +149,7 @@ jobs:
 
       - name: Login ghcr.io
         if: inputs.push && github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -157,7 +158,7 @@ jobs:
       - name: Push
         id: push
         if: inputs.push && github.event_name != 'pull_request'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.image.context }}
           file: ${{ matrix.image.dockerfile }}
@@ -181,7 +182,7 @@ jobs:
             echo "In appstore.yaml eintragen: \`image: $IMAGE@$DIGEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.push.outcome == 'success'
         with:
           name: digest-${{ steps.meta.outputs.key }}
@@ -198,7 +199,7 @@ jobs:
       digests: ${{ steps.merge.outputs.digests }}
       image: ${{ steps.merge.outputs.image }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: digest-*
           path: digests

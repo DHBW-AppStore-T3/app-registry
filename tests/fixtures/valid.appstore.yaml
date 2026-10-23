@@ -5,7 +5,7 @@ scope: team
 workload:
   containers:
     - name: ide
-      image: ghcr.io/dhbw-appstore-t3/demo-ide@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      image: ghcr.io/dhbw-appstore-t3/apps/demo-ide@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       expose:
         port: 8080
         path: /

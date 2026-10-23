@@ -1,0 +1,31 @@
+name: contract-drift
+
+# Der Validator spiegelt app/k8s/spec.py des Backends (Branch dev). Dieser Check laesst beide dieselben
+# zufaellig verfaelschten appstore.yaml bewerten und schlaegt fehl, sobald sie sich widersprechen,
+# z.B. wenn das Backend ein Feld ergaenzt (siehe backend feat/resource-overrides: resourceBounds).
+on:
+  schedule:
+    - cron: "43 5 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths: ["scripts/validate_appstore_yaml.py", "tests/**", ".github/workflows/contract-drift.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Validator gegen Backend-Vertrag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml jsonschema pydantic
+      - name: spec.py aus dem Backend (dev) holen
+        run: curl -fsSL -o "$RUNNER_TEMP/spec.py" https://raw.githubusercontent.com/DHBW-AppStore-T3/backend/dev/app/k8s/spec.py
+      - name: Gleiches Urteil wie das Backend
+        env:
+          BACKEND_SPEC_PY: ${{ runner.temp }}/spec.py
+        run: python -m unittest discover -s tests -p "test_contract_drift.py" -v
