@@ -1,0 +1,38 @@
+apiVersion: appstore/v2
+name: Demo_IDE
+runtime: kubernetes
+scope: team
+workload:
+  containers:
+    - name: ide
+      image: docker.io/library/nginx:latest
+      expose:
+        port: 80
+        path: /
+      resources:
+        cpu: 8
+        memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      env:
+        - name: PASSWORD
+          from: generated-password
+      writablePaths:
+        - /tmp
+  storage:
+    size: 5Gi
+    mountPath: /home/project
+egress: none
+foo: bar
+variables:
+  - name: tasks
+    type: file
+    mountPath: /opt/tasks.zip
+    maxSize: 1Mi
+access:
+  - type: url
+    template: "https://{workload}.{zone}.{domain}/"
+  - type: password
+    from: generated-password
+    username: "{user}"

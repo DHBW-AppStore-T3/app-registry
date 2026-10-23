@@ -1,0 +1,5 @@
+name: windows-desktop-app
+repo: https://github.com/DHBW-AppStore-T3/Windows-Desktop-App
+owner: DHBW-AppStore-T3
+runtime: vm
+description: "Windows-Desktop als VM."

@@ -1,0 +1,7 @@
+# Kopiere diese Datei nach .github/workflows/ci.yml in deinem App-Repo.
+name: ci
+on: [push, pull_request]
+permissions: { contents: read, packages: write }
+jobs:
+  app:
+    uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@main

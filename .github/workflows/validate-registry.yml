@@ -1,0 +1,57 @@
+name: validate-registry
+
+on:
+  pull_request:
+    paths: ["apps/**", "schema/**", "scripts/**", ".github/workflows/validate-registry.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/**", "schema/**", "scripts/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  entries:
+    name: Registry-Eintraege pruefen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml jsonschema
+      - name: Geaenderte Eintraege ermitteln
+        id: changed
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          if [ -z "$BASE" ] || echo "$BASE" | grep -Eq '^0+$'; then
+            files="$(ls apps/*.yaml)"
+          elif git diff --name-only "$BASE" "$HEAD" | grep -Eq '^(schema|scripts)/'; then
+            files="$(ls apps/*.yaml)"   # Schema/Skript geaendert: alle pruefen
+          else
+            files="$(git diff --name-only --diff-filter=AM "$BASE" "$HEAD" -- 'apps/*.yaml')"
+          fi
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"; echo "$files" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+      - name: Pruefen (Schema, Repo oeffentlich, Vertragsdateien)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          [ -z "$FILES" ] && { echo "keine geaenderten Eintraege"; exit 0; }
+          python scripts/check_entry.py $FILES
+  selftest:
+    name: Validator-Selbsttest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml
+      - run: python scripts/validate_appstore_yaml.py tests/fixtures/valid.appstore.yaml
+      - name: invalid fixture muss fehlschlagen
+        run: "! python scripts/validate_appstore_yaml.py tests/fixtures/invalid.appstore.yaml"

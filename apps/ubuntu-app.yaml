@@ -1,0 +1,5 @@
+name: ubuntu-app
+repo: https://github.com/DHBW-AppStore-T3/Ubuntu-App
+owner: DHBW-AppStore-T3
+runtime: vm
+description: "Ubuntu-Desktop als VM."

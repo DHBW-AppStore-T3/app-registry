@@ -1,0 +1,37 @@
+apiVersion: appstore/v2
+name: demo-ide
+runtime: kubernetes
+scope: team
+workload:
+  containers:
+    - name: ide
+      image: ghcr.io/dhbw-appstore-t3/demo-ide@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      expose:
+        port: 8080
+        path: /
+      resources:
+        cpu: 500m
+        memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      env:
+        - name: PASSWORD
+          from: generated-password
+      writablePaths:
+        - /tmp
+  storage:
+    size: 5Gi
+    mountPath: /home/project
+egress: none
+variables:
+  - name: tasks
+    type: file
+    mountPath: /opt/tasks.zip
+    maxSize: 1Mi
+access:
+  - type: url
+    template: "https://{workload}.{zone}.{domain}/"
+  - type: password
+    from: generated-password
+    username: "{user}"

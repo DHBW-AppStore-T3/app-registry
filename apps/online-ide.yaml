@@ -1,0 +1,5 @@
+name: online-ide
+repo: https://github.com/DHBW-AppStore-T3/Online-IDE
+owner: DHBW-AppStore-T3
+runtime: vm
+description: "Demo-App: browserbasierte IDE mit Aufgaben fuer Studierende."

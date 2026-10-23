@@ -1,0 +1,5 @@
+name: jupyter-notebook
+repo: https://github.com/DHBW-AppStore-T3/Jupyter-Notebook
+owner: DHBW-AppStore-T3
+runtime: vm
+description: "Jupyter Notebook Umgebung fuer Datenanalyse und Lehre."

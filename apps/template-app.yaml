@@ -1,0 +1,5 @@
+name: template-app
+repo: https://github.com/DHBW-AppStore-T3/template-app
+owner: DHBW-AppStore-T3
+runtime: vm
+description: "Vorlage fuer neue AppStore-Apps (OpenStack-VM mit Terraform und Packer)."

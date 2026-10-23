@@ -1,0 +1,5 @@
+name: pgadmin
+repo: https://github.com/DHBW-AppStore-T3/pgAdmin
+owner: DHBW-AppStore-T3
+runtime: vm
+description: "pgAdmin als Web-Oberflaeche fuer PostgreSQL-Datenbanken."
