@@ -24,7 +24,7 @@ import sys
 import yaml
 
 REGISTRY_PREFIX = "ghcr.io/dhbw-appstore-t3/"
-MAX_CPU_M, MAX_MEM_MI, MAX_STORAGE_MI, MAX_CONTAINERS = 2000, 4096, 20 * 1024, 3
+MAX_CPU_M, MAX_MEM_MI, MAX_STORAGE_MI, MAX_CONTAINERS = 4000, 8192, 20 * 1024, 3
 MAX_FILE_VARIABLE_BYTES = 1024 * 1024
 
 IMAGE_DIGEST_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?(/[a-z0-9._-]+)+@sha256:[0-9a-f]{64}$")
@@ -100,8 +100,34 @@ def placeholders(e: Errors, loc: str, tpl: str, allowed: set[str]) -> None:
         e.add(loc, f"invalid template: {exc}")
 
 
+def check_resource_bounds(e: Errors, loc: str, c: dict) -> None:
+    """Optional ``resourceBounds``: the range people may choose cpu/memory from; resources are its defaults."""
+    rb = c.get("resourceBounds")
+    if rb is None:
+        return
+    here = f"{loc}.resourceBounds"
+    if not only_keys(e, here, rb, {"cpu", "memory"}, {"cpu", "memory"}):
+        return
+    res = c.get("resources") if isinstance(c.get("resources"), dict) else {}
+    for key, conv, limit, unit in (("cpu", cpu_m, MAX_CPU_M, "m"), ("memory", mem_mi, MAX_MEM_MI, "Mi")):
+        rng = rb.get(key)
+        if not only_keys(e, f"{here}.{key}", rng, {"min", "max"}, {"min", "max"}):
+            continue
+        lo, hi = conv(rng.get("min")), conv(rng.get("max"))
+        if lo is None or hi is None:
+            e.add(f"{here}.{key}", "invalid quantity")
+            continue
+        if lo > hi:
+            e.add(f"{here}.{key}", "min must not exceed max")
+        if hi > limit:
+            e.add(f"{here}.{key}.max", f"exceeds platform limit of {limit}{unit}")
+        default = conv(res.get(key))
+        if default is not None and not lo <= default <= hi:
+            e.add(f"{loc}.resources.{key}", f"the default must lie within resourceBounds.{key}")
+
+
 def check_container(e: Errors, loc: str, c: object, allow_tags: bool) -> bool:
-    if not only_keys(e, loc, c, {"name", "image", "expose", "resources", "env", "writablePaths"},
+    if not only_keys(e, loc, c, {"name", "image", "expose", "resources", "resourceBounds", "env", "writablePaths"},
                      {"name", "image", "resources"}):
         return False
     if isinstance(c.get("name"), str) and not NAME_RE.match(c["name"]):
@@ -144,6 +170,7 @@ def check_container(e: Errors, loc: str, c: object, allow_tags: bool) -> bool:
                     e.add(f"{loc}.resources.requests.cpu", "must not exceed cpu")
                 if mem is not None and rm > mem:
                     e.add(f"{loc}.resources.requests.memory", "must not exceed memory")
+    check_resource_bounds(e, loc, c)
     env = c.get("env", [])
     if not isinstance(env, list):
         e.add(f"{loc}.env", "must be a list")
