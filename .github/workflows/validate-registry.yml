@@ -40,14 +40,15 @@ jobs:
           else
             files="$(git diff --name-only --diff-filter=ACMR "$BASE" "$HEAD" -- 'apps/*.yaml')"
           fi
-          echo "files<<EOF" >> "$GITHUB_OUTPUT"; echo "$files" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+          { echo "files<<EOF"; echo "$files"; echo "EOF"; } >> "$GITHUB_OUTPUT"
       - name: Pruefen (Schema, Repo oeffentlich, Vertragsdateien, Images)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILES: ${{ steps.changed.outputs.files }}
         run: |
           [ -z "$FILES" ] && { echo "keine geaenderten Eintraege"; exit 0; }
-          python scripts/check_entry.py $FILES
+          mapfile -t entries <<< "$FILES"
+          python scripts/check_entry.py "${entries[@]}"
 
   tests:
     name: Selbsttests (Validator, Eintrags-Pruefung)

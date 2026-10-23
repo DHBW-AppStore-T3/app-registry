@@ -207,6 +207,8 @@ jobs:
       - id: merge
         run: |
           jq -s 'add' digests/*.json > all.json
-          echo "digests=$(jq -c . all.json)" >> "$GITHUB_OUTPUT"
-          echo "digest=$(jq -r 'to_entries|sort_by(.key)|.[0].value' all.json)" >> "$GITHUB_OUTPUT"
-          echo "image=$(jq -r 'to_entries|sort_by(.key)|.[0]|.key+"@"+.value' all.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo "digests=$(jq -c . all.json)"
+            echo "digest=$(jq -r 'to_entries|sort_by(.key)|.[0].value' all.json)"
+            echo "image=$(jq -r 'to_entries|sort_by(.key)|.[0]|.key+"@"+.value' all.json)"
+          } >> "$GITHUB_OUTPUT"
