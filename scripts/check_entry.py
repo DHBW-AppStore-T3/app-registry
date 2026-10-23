@@ -58,10 +58,16 @@ def fetch(url: str, headers: dict[str, str] | None = None, method: str = "GET") 
 
 
 def gh(path: str, raw: bool = False) -> tuple[int, object]:
+    """GET from the GitHub API. The token only lifts the rate limit; orgs with an IP allow list (aquasecurity)
+    refuse it from runner IPs although their public data is open, so a 403 is retried once without it."""
     headers = {"Accept": "application/vnd.github.raw+json" if raw else "application/vnd.github+json"}
-    if os.environ.get("GITHUB_TOKEN"):
-        headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
-    code, body = fetch(f"https://api.github.com/{path}", headers)
+    url = f"https://api.github.com/{path}"
+    token = os.environ.get("GITHUB_TOKEN")
+    code, body = fetch(url, {**headers, "Authorization": f"Bearer {token}"} if token else headers)
+    if token and code == 403:
+        anon_code, anon_body = fetch(url, headers)
+        if anon_code == 200:
+            code, body = anon_code, anon_body
     if code != 200:
         return code, api_message(body)
     return code, body.decode("utf-8") if raw else json.loads(body)
