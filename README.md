@@ -11,6 +11,20 @@ Dieses Repo enthaelt
 
 Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der Wahrheit des AppStores: Apps und Versionen werden im AppStore selbst registriert (siehe unten).
 
+## Registrierte Apps (Stand 2026-10-24)
+
+| App | Runtime | Version | Hinweis |
+|---|---|---|---|
+| pgadmin | pods | `v2.0.0` | zwei Container (pgAdmin + PostgreSQL/Pagila), Team-Scope |
+| jupyter-notebook | pods | `v2.0.0` | JupyterLab pro Person, Egress `internet` |
+| web-latex | pods | `v2.0.0` | Editor pro Person, Startpfad `/login`, optionale Starter-ZIP |
+| online-ide | pods | `v2.0.0` | code-server pro Person |
+| template-app | pods | `v2.0.0` | Vorlage (nginx) |
+| ubuntu-app | vm | `v1.0.0` | nur VM, kein Pods-Pendant |
+| windows-desktop-app | vm | `v0.3.4` | nur VM |
+
+Aeltere `v1.x`-Tags der Pods-Apps sind VM-Versionen und bleiben nur ueber ihren Tag erreichbar.
+
 ## So kommt eine neue App in den AppStore (Schritt fuer Schritt)
 
 ### 1. App-Repo anlegen
@@ -71,10 +85,27 @@ git tag v1.0.0 && git push origin v1.0.0
 ```
 
 ### 7. App und Version im AppStore einreichen
-Das ist aktuell ein **manueller Schritt im AppStore-Frontend** (siehe naechster Abschnitt):
-1. Als eingeloggter Nutzer App anlegen (Name, Beschreibung, `git_link` = Repo-URL, optional Bild). Das Backend prueft, dass es das Repo erreichen kann.
-2. Version (Tag) zur Pruefung einreichen.
-3. Ein Admin genehmigt die Version fuer genau diesen Commit. Erst danach koennen Nutzer sie deployen. Verschiebt sich der Tag, muss neu eingereicht werden.
+Per Frontend (als Dozent/Admin) oder direkt per API (Beispiel Staging; `$T` = Keycloak-Access-Token, `$H` = `https://appstore-staging.<zone>/api`):
+
+```bash
+# 1. App anlegen (Repo muss oeffentlich sein; Rolle teacher oder admin)
+curl -X POST $H/apps/ -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"name":"meine-app","description":"...","git_link":"https://github.com/DHBW-AppStore-T3/meine-app","is_private":false}'
+# 2. Version (Git-Tag) einreichen; das Backend loest den Tag auf einen Commit auf
+curl -X POST $H/apps/$APP_ID/versions/v2.0.0/submit -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -d '{}'
+# 3. Admin gibt genau diesen Commit frei
+curl -X POST $H/admin/apps/$APP_ID/versions/v2.0.0/approve -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -d '{}'
+# 4. Testweise deployen (Teams = Liste von Nutzer-IDs), danach DELETE $H/deployments/$DEPLOYMENT_ID
+curl -X POST $H/deployments/ -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"name":"test","appId":"'$APP_ID'","releaseTag":"v2.0.0","teams":[{"name":"t1","userIds":["'$USER_ID'"]}]}'
+```
+
+Hinweise:
+- `git_link` ist nach dem Anlegen unveraenderlich; `submit_all_versions: true` reicht bis zu 20 vorhandene Tags auf einmal ein (nicht sinnvoll, wenn aeltere Tags noch VM-Versionen sind).
+- Ein Admin genehmigt die Version fuer genau diesen Commit. Verschiebt sich der Tag, muss neu eingereicht werden.
+- Der Tag muss auf einen Commit zeigen, der eine gueltige `appstore.yaml` enthaelt (Pods). Ein Tag aus der VM-Zeit (`v1.x`) hat keine und taugt nicht als Pods-Version.
+- Nach dem Deploy ein paar Sekunden warten: Pods haben keine Readiness-Probe, direkt nach "success" kann kurz 502 kommen.
+- Prod: dieselben Schritte gegen `https://appstore.<zone>/api`, nur durch den Koordinator.
 
 ### 8. In die Registry eintragen
 PR gegen dieses Repo mit `apps/<name>.yaml`:
@@ -93,7 +124,7 @@ Der Check `validate-registry` prueft Schema, Dateiname, dass das Repo erreichbar
 
 | Schritt | Endpoint | Auth |
 |---|---|---|
-| App anlegen | `POST /apps/` (`git_link`, `submit_all_versions`) | Keycloak-Bearer-Token eines Nutzers |
+| App anlegen | `POST /apps/` (Dozent/Admin) (`git_link`, `submit_all_versions`) | Keycloak-Bearer-Token eines Nutzers |
 | Version einreichen | `POST /apps/{app_id}/versions/{tag}/submit` | Owner der App oder Admin |
 | Freigeben / Ablehnen / Widerrufen | `POST /apps/{app_id}/versions/{tag}/approve\|reject\|revoke` | nur Admin (`require_admin`) |
 
