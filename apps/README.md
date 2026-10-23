@@ -14,4 +14,4 @@ Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Ne
 
 Lokal pruefen: `python scripts/check_entry.py apps/<name>.yaml`.
 
-Hinweis: Die bestehenden Eintraege sind VM-Apps (Terraform/Packer). Sie haben noch keine `appstore.yaml`.
+Hinweis: `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); `ubuntu-app` und `windows-desktop-app` sind weiterhin VM-Apps.

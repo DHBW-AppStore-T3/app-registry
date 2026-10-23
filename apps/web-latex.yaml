@@ -1,5 +1,5 @@
 name: web-latex
 repo: https://github.com/DHBW-AppStore-T3/Web-LaTeX
 owner: DHBW-AppStore-T3
-runtime: vm
-description: "LaTeX-Editor im Browser."
+runtime: pods
+description: "LaTeX-Editor im Browser mit PDF-Vorschau, ein Pod pro Person."
