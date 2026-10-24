@@ -1,0 +1,40 @@
+# Release-Prozess: Wer ein GitHub Release "vX.Y.Z" veroeffentlicht (Releases > Draft a new release, neues Tag vX.Y.Z auf
+# main), loest damit aus, dass das bewegliche Major-Tag "vX" auf denselben Commit gesetzt wird. Davor laufen die Tests.
+# Die Tags v* sind per Ruleset geschuetzt (nur Admins und dieser Workflow duerfen sie anlegen, verschieben, loeschen).
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  move-major-tag:
+    name: Major-Tag verschieben
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml jsonschema
+      - name: Tests des Release-Stands
+        run: python -m unittest discover -s tests -v
+      - name: Major-Tag auf das Release setzen
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release-Tag muss vX.Y.Z heissen, ist aber: $TAG"; exit 1
+          fi
+          major="v${BASH_REMATCH[1]}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -fa "$major" -m "$major -> $TAG" "$TAG^{commit}"
+          git push -f origin "refs/tags/$major"
+          echo "### $major zeigt jetzt auf $TAG ($(git rev-parse --short "$TAG^{commit}"))" >> "$GITHUB_STEP_SUMMARY"
