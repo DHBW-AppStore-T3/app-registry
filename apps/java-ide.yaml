@@ -1,0 +1,5 @@
+name: java-ide
+repo: https://github.com/DHBW-AppStore-T3/java-ide
+owner: DHBW-AppStore-T3
+runtime: pods
+description: "Browser-IDE (code-server) mit JDK 21 und Maven fuer Java-Uebungen, ein Pod pro Person."
