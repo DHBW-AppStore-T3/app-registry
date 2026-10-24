@@ -168,5 +168,17 @@ class CheckEntry(unittest.TestCase):
         self.assertIn("digest not found", self.run_check(entry(), FakeGitHub({"appstore.yaml": SPEC}, ghcr=404))[0])
 
 
+class SpecImages(unittest.TestCase):
+    def test_only_digest_pinned_ghcr_images_are_checked(self):
+        import check_spec_images as csi
+        digest = "ghcr.io/dhbw-appstore-t3/apps/a@sha256:" + "a" * 64
+        spec = {"workload": {"containers": [
+            {"image": digest}, {"image": digest}, {"image": "ghcr.io/dhbw-appstore-t3/apps/b:latest"},
+            {"image": "docker.io/library/nginx@sha256:" + "b" * 64}, {"name": "no-image"}]}}
+        self.assertEqual(csi.images(spec), [digest])
+        self.assertEqual(csi.images(None), [])
+        self.assertEqual(csi.images({"workload": None}), [])
+
+
 if __name__ == "__main__":
     unittest.main()

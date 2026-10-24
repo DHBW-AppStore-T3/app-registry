@@ -1,0 +1,57 @@
+# Wiederverwendbarer Vertragscheck fuer AppStore-Apps (Pods), ohne zu bauen: appstore.yaml gegen App-Vertrag v2
+# und, dass die gepinnten Images ohne Zugangsdaten von ghcr.io gezogen werden koennen.
+# Aufruf aus dem App-Repo: siehe templates/spec-check-caller.yml. Die volle Pipeline (app-ci.yml) enthaelt den
+# Vertragscheck ebenfalls; dieser Workflow ist fuer Apps, die ihren eigenen Build behalten.
+name: validate-spec
+
+on:
+  workflow_call:
+    inputs:
+      appstore-yaml:
+        description: "Pfad zur appstore.yaml"
+        type: string
+        default: "appstore.yaml"
+      strict-image-pin:
+        description: "true = Tags statt @sha256 sind ein Fehler (so prueft der AppStore). false nur vor dem ersten Build."
+        type: boolean
+        default: true
+      check-images:
+        description: "Pruefen, dass jedes mit @sha256 gepinnte Image anonym von ghcr.io gezogen werden kann (Paket auf Public)"
+        type: boolean
+        default: true
+      registry-ref:
+        description: "Ref von DHBW-AppStore-T3/app-registry, aus dem die Skripte geholt werden (bei gepinntem Workflow dasselbe Tag)"
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  spec:
+    name: appstore.yaml pruefen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: DHBW-AppStore-T3/app-registry
+          ref: ${{ inputs.registry-ref }}
+          path: .app-registry
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml jsonschema
+      - name: Vertrag pruefen (app contract v2)
+        env:
+          SPEC: ${{ inputs.appstore-yaml }}
+          STRICT: ${{ inputs.strict-image-pin }}
+        run: |
+          flags=()
+          [ "$STRICT" = "true" ] || flags+=(--allow-tags)
+          python .app-registry/scripts/validate_appstore_yaml.py "$SPEC" "${flags[@]}"
+      - name: Images oeffentlich ziehbar?
+        if: inputs.check-images
+        env:
+          SPEC: ${{ inputs.appstore-yaml }}
+        run: python .app-registry/scripts/check_spec_images.py "$SPEC"
