@@ -1,0 +1,19 @@
+# Optional. Kopiere diese Datei nach .github/workflows/spec.yml in deinem App-Repo: prueft appstore.yaml gegen den
+# App-Vertrag v2 und ob die gepinnten Images oeffentlich ziehbar sind, ohne zu bauen. Fuer Apps, die ihren eigenen
+# Build behalten; wer templates/app-ci-caller.yml nutzt, hat diese Pruefung schon.
+name: spec
+on:
+  push:
+    branches: [main, dev]
+    paths: ["appstore.yaml", ".github/workflows/spec.yml"]
+  pull_request:
+    paths: ["appstore.yaml", ".github/workflows/spec.yml"]
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  spec:
+    # Pinnen: @main durch ein Release-Tag ersetzen (z.B. @v1) und `registry-ref` auf dasselbe Tag setzen.
+    uses: DHBW-AppStore-T3/app-registry/.github/workflows/validate-spec.yml@main
+    # with:
+    #   registry-ref: main
+    #   strict-image-pin: false   # nur vor dem ersten Build, solange es noch keinen Digest gibt

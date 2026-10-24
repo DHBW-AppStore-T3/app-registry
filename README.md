@@ -34,7 +34,7 @@ Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide und pgadmin sind
 
 ### 1. App-Repo anlegen
 - Repo in der Org `DHBW-AppStore-T3` (oder GitHub-Host aus `APP_GIT_ALLOWED_HOSTS`, aktuell `github.com`). **Das Repo muss oeffentlich sein**, sonst lehnt das Backend es ab.
-- Pods-App: `Dockerfile` und `appstore.yaml` im Repo-Root. VM-App: `terraform/` und `packer/` (siehe [template-app](https://github.com/DHBW-AppStore-T3/template-app)).
+- Pods-App: `appstore.yaml` im Repo-Root und das Image unter `image/` (`image/Dockerfile`, so machen es alle bestehenden Pods-Apps; mehrere Images je in einem Unterordner, z.B. `image/pgadmin`). VM-App: `terraform/` und `packer/` (siehe [template-app](https://github.com/DHBW-AppStore-T3/template-app)).
 
 ### 2. `appstore.yaml` schreiben (nur Pods)
 Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `app/k8s/spec.py` im Backend):
@@ -53,24 +53,33 @@ python scripts/validate_appstore_yaml.py appstore.yaml --allow-tags
 ```
 
 ### 3. CI einbinden
-Kopiere [`templates/app-ci-caller.yml`](templates/app-ci-caller.yml) nach `.github/workflows/ci.yml` im App-Repo:
+Kopiere [`templates/app-ci-caller.yml`](templates/app-ci-caller.yml) nach `.github/workflows/ci.yml` im App-Repo. Kopiert wird nur dieser kleine Aufrufer; die Pipeline selbst bleibt hier und wird bei jedem Lauf von `app-ci.yml` geholt, Aenderungen an ihr gelten also sofort fuer alle Aufrufer (siehe *Pinnen*). Im Kern:
 
 ```yaml
-name: ci
-on: [push, pull_request]
-permissions: { contents: read, packages: write }
 jobs:
   app:
     uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@main
+    with:
+      images: '[{"suffix":"","context":"image","dockerfile":"image/Dockerfile","smoke_test":".github/smoke-test.sh"}]'
 ```
+
+Die Vorlage baut und pusht nur bei Aenderungen unter `image/` (wie die bestehenden Apps), Pull Requests bauen und pruefen nur.
 
 Die Pipeline macht:
 1. **validate** - `appstore.yaml` gegen den Vertrag.
 2. **lint** - hadolint auf dem Dockerfile.
-3. **build** - buildx-Build, **Trivy** (Fehler bei behebbaren HIGH/CRITICAL-Funden), dann Push nach `ghcr.io/dhbw-appstore-t3/apps/<app>:<commit-sha>` (auf dem Default-Branch zusaetzlich `:latest`). Bei Pull Requests wird gebaut und gescannt, aber nicht gepusht.
+3. **build** - buildx-Build, optional **Smoke-Test**, **Trivy** (Fehler bei behebbaren HIGH/CRITICAL-Funden), dann Push nach `ghcr.io/dhbw-appstore-t3/apps/<app>:<commit-sha>` (auf dem Default-Branch zusaetzlich `:latest`). Bei Pull Requests wird gebaut und gescannt, aber nicht gepusht.
 4. **collect** - gibt `digest`, `digests` (JSON) und `image` (`ghcr.io/...@sha256:...`, bei mehreren Images das alphabetisch erste) als Workflow-Outputs aus; der Digest jedes Images steht auch in der Job-Summary.
 
-Optionale Inputs (`with:`): `app-name` (Default: Repo-Name in Kleinbuchstaben), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
+**Smoke-Test:** `smoke_test` je Image ist der Pfad eines Skripts im App-Repo (Vorlage: [`templates/smoke-test-example.sh`](templates/smoke-test-example.sh)). Die Pipeline fuehrt es mit dem lokal gebauten Image aus, **bevor** gescannt oder gepusht wird, und setzt `IMAGE` und `PLATFORM_RUN_FLAGS` (der Sicherheitskontext der Plattform: UID 1000, read-only Root, keine Capabilities, kein Privilege-Escalation). Das Skript startet das Image damit, wartet auf die App und prueft sie (Login, ein echter Request). Schlaegt es fehl, wird nichts gepusht.
+
+Optionale Inputs (`with:`): `registry-ref` (siehe *Pinnen*),  `app-name` (Default: Repo-Name in Kleinbuchstaben), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
+
+#### Nur den Vertragscheck nutzen
+Wer seinen eigenen Build behaelt, bindet nur [`templates/spec-check-caller.yml`](templates/spec-check-caller.yml) (`validate-spec.yml`) ein: `appstore.yaml` gegen den Vertrag (streng, Digest-Pflicht) und die Pruefung, dass jedes gepinnte Image anonym von ghcr.io gezogen werden kann, ohne zu bauen.
+
+#### Pinnen
+`@main` heisst: jede Aenderung hier gilt sofort fuer jede App-CI, auch eine kaputte. Ein Aufrufer kann auf ein Release-Tag dieses Repos pinnen (`app-ci.yml@v1`). Dann muss auch der Validator aus diesem Stand kommen, weil die Pipeline ihn selbst aus diesem Repo holt: `registry-ref: v1` in `with:` setzen. Ein Release-Tag legt jemand mit Schreibrecht nach dem Merge an (`git tag v1.0.0 && git tag -f v1 && git push origin v1.0.0 v1 -f`; `v1` wandert mit kompatiblen Updates mit, `v1.0.0` nicht).
 
 ### 4. Digest in `appstore.yaml` eintragen (Henne-Ei-Problem)
 Der Vertrag verlangt `@sha256:`-Digests, der Digest existiert aber erst nach dem Build. Ablauf:
