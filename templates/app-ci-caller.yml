@@ -8,10 +8,10 @@ name: ci
 on:
   push:
     branches: [main, dev]
-    paths: ["image/**", ".github/workflows/ci.yml", ".github/smoke-test.sh", ".trivyignore"]
+    paths: ["image/**", ".github/workflows/ci.yml", ".github/smoke-test.sh", ".trivyignore", ".hadolint.yaml"]
   pull_request:
     branches: [main, dev]
-    paths: ["image/**", "appstore.yaml", ".github/workflows/ci.yml", ".github/smoke-test.sh", ".trivyignore"]
+    paths: ["image/**", "appstore.yaml", ".github/workflows/ci.yml", ".github/smoke-test.sh", ".trivyignore", ".hadolint.yaml"]
   schedule:
     - cron: "0 5 * * 1"
   workflow_dispatch:
