@@ -2,10 +2,14 @@ name: validate-registry
 
 on:
   pull_request:
-    paths: ["apps/**", "schema/**", "scripts/**", ".github/workflows/validate-registry.yml"]
+    paths: ["apps/**", "schema/**", "scripts/**", "tests/**", "templates/**", ".github/workflows/**"]
   push:
     branches: [main]
-    paths: ["apps/**", "schema/**", "scripts/**"]
+    paths: ["apps/**", "schema/**", "scripts/**", "tests/**", "templates/**", ".github/workflows/**"]
+  schedule:
+    # Woechentlich alle Eintraege neu pruefen: Repo noch oeffentlich, appstore.yaml gueltig, Images noch ziehbar.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,10 +19,10 @@ jobs:
     name: Registry-Eintraege pruefen
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml jsonschema
@@ -28,30 +32,49 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
-          if [ -z "$BASE" ] || echo "$BASE" | grep -Eq '^0+$'; then
+          # Kein Vergleichs-Commit (Zeitplan, manueller Start, erster Push) oder Schema/Skripte geaendert: alles pruefen.
+          if [ -z "$BASE" ] || echo "$BASE" | grep -Eq '^0+$' || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             files="$(ls apps/*.yaml)"
           elif git diff --name-only "$BASE" "$HEAD" | grep -Eq '^(schema|scripts)/'; then
             files="$(ls apps/*.yaml)"   # Schema/Skript geaendert: alle pruefen
           else
-            files="$(git diff --name-only --diff-filter=AM "$BASE" "$HEAD" -- 'apps/*.yaml')"
+            files="$(git diff --name-only --diff-filter=ACMR "$BASE" "$HEAD" -- 'apps/*.yaml')"
           fi
-          echo "files<<EOF" >> "$GITHUB_OUTPUT"; echo "$files" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
-      - name: Pruefen (Schema, Repo oeffentlich, Vertragsdateien)
+          { echo "files<<EOF"; echo "$files"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+      - name: Pruefen (Schema, Repo oeffentlich, Vertragsdateien, Images)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILES: ${{ steps.changed.outputs.files }}
         run: |
           [ -z "$FILES" ] && { echo "keine geaenderten Eintraege"; exit 0; }
-          python scripts/check_entry.py $FILES
-  selftest:
-    name: Validator-Selbsttest
+          mapfile -t entries <<< "$FILES"
+          python scripts/check_entry.py "${entries[@]}"
+
+  tests:
+    name: Selbsttests (Validator, Eintrags-Pruefung)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install --quiet pyyaml
-      - run: python scripts/validate_appstore_yaml.py tests/fixtures/valid.appstore.yaml
-      - name: invalid fixture muss fehlschlagen
-        run: "! python scripts/validate_appstore_yaml.py tests/fixtures/invalid.appstore.yaml"
+      - run: pip install --quiet pyyaml jsonschema
+      - run: python -m unittest discover -s tests -v
+      - name: Eintraege offline (Schema, Dateiname, doppelte Repos)
+        run: python scripts/check_entry.py --offline apps/*.yaml
+
+  workflows:
+    name: Workflows pruefen (actionlint, Action-Versionen)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml jsonschema
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+      - name: uses:-Referenzen aufloesen
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check_action_refs.py

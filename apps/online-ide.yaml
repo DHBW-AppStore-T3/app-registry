@@ -2,4 +2,4 @@ name: online-ide
 repo: https://github.com/DHBW-AppStore-T3/Online-IDE
 owner: DHBW-AppStore-T3
 runtime: pods
-description: "Browserbasierte IDE (code-server) mit Aufgaben fuer Studierende, ein Pod pro Person."
+description: "Browserbasierte IDE (code-server) fuer Studierende, ein Pod pro Person."

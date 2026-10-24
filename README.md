@@ -5,9 +5,13 @@
 Dieses Repo enthaelt
 - `apps/<name>.yaml` - Registry-Eintraege aller bekannten AppStore-Apps (Name, Repo, Owner, Runtime, Beschreibung),
 - `.github/workflows/app-ci.yml` - wiederverwendbare Pipeline: Vertrag pruefen, Dockerfile linten, bauen, scannen, nach ghcr.io pushen,
+- `.github/workflows/validate-registry.yml` - Checks dieses Repos (Eintraege, Selbsttests, Workflows), woechentlich auch ohne Aenderung,
+- `.github/workflows/contract-drift.yml` - vergleicht den Validator mit dem Vertragsparser des Backends,
 - `templates/app-ci-caller.yml` - die Datei, die ein App-Repo kopiert,
 - `scripts/validate_appstore_yaml.py` - Validator fuer den App-Vertrag v2 (`appstore.yaml`), nur PyYAML,
-- `schema/app-entry.schema.json` - JSON-Schema der Registry-Eintraege.
+- `scripts/check_entry.py`, `scripts/check_action_refs.py` - Pruefung der Registry-Eintraege bzw. der `uses:`-Versionen in den Workflows,
+- `schema/app-entry.schema.json` - JSON-Schema der Registry-Eintraege,
+- `tests/` - Selbsttests und Fixtures.
 
 Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der Wahrheit des AppStores: Apps und Versionen werden im AppStore selbst registriert (siehe unten).
 
@@ -19,11 +23,11 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 | jupyter-notebook | pods | `v2.0.0` | JupyterLab pro Person, Egress `internet` |
 | web-latex | pods | `v2.0.0` | Editor pro Person, Startpfad `/login`, optionale Starter-ZIP |
 | online-ide | pods | `v2.0.0` | code-server pro Person |
-| template-app | pods | `v2.0.0` | Vorlage (nginx) |
+| template-app | pods | `v2.0.0` | Vorlage (nginx); `terraform/` + `packer/` liegen noch im Repo, zaehlen aber nicht (`appstore.yaml` macht die Version zum Pods-Release) |
 | ubuntu-app | vm | `v1.0.0` | nur VM, kein Pods-Pendant |
 | windows-desktop-app | vm | `v0.3.4` | nur VM |
 
-Aeltere `v1.x`-Tags der Pods-Apps sind VM-Versionen und bleiben nur ueber ihren Tag erreichbar.
+Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide und pgadmin sind VM-Versionen und bleiben nur ueber ihren Tag erreichbar (template-app hat nur `v2.0.0`).
 
 ## So kommt eine neue App in den AppStore (Schritt fuer Schritt)
 
@@ -34,7 +38,7 @@ Aeltere `v1.x`-Tags der Pods-Apps sind VM-Versionen und bleiben nur ueber ihren 
 ### 2. `appstore.yaml` schreiben (nur Pods)
 Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `app/k8s/spec.py` im Backend):
 - Unbekannte Felder werden abgelehnt; Security-Kontext, NetworkPolicy, RBAC kann die App nicht setzen.
-- `image` muss mit **Digest** gepinnt sein (`ghcr.io/dhbw-appstore-t3/<app>@sha256:<64 hex>`), Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/`.
+- `image` muss mit **Digest** gepinnt sein, Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/` erlaubt. Konvention fuer App-Images: `ghcr.io/dhbw-appstore-t3/apps/<app>@sha256:<64 hex>` (die Plattform-Images `backend`, `worker`, `frontend` liegen eine Ebene darueber).
 - Genau ein Container hat `expose` (Port 1024-65535). Max. 3 Container, je max. 2 CPU / 4096 Mi, Storage max. 20 Gi.
 - `egress: none` (Default) oder `internet`.
 
@@ -61,10 +65,10 @@ jobs:
 Die Pipeline macht:
 1. **validate** - `appstore.yaml` gegen den Vertrag.
 2. **lint** - hadolint auf dem Dockerfile.
-3. **build** - buildx-Build, **Trivy** (Fehler bei behebbaren HIGH/CRITICAL-Funden), dann Push nach `ghcr.io/dhbw-appstore-t3/<app>:<commit-sha>` (auf dem Default-Branch zusaetzlich `:latest`). Bei Pull Requests wird gebaut und gescannt, aber nicht gepusht.
-4. **collect** - gibt `digest`, `digests` (JSON) und `image` (`ghcr.io/...@sha256:...`) als Workflow-Outputs aus; der Digest steht auch in der Job-Summary.
+3. **build** - buildx-Build, **Trivy** (Fehler bei behebbaren HIGH/CRITICAL-Funden), dann Push nach `ghcr.io/dhbw-appstore-t3/apps/<app>:<commit-sha>` (auf dem Default-Branch zusaetzlich `:latest`). Bei Pull Requests wird gebaut und gescannt, aber nicht gepusht.
+4. **collect** - gibt `digest`, `digests` (JSON) und `image` (`ghcr.io/...@sha256:...`, bei mehreren Images das alphabetisch erste) als Workflow-Outputs aus; der Digest jedes Images steht auch in der Job-Summary.
 
-Optionale Inputs (`with:`): `app-name` (Default: Repo-Name), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
+Optionale Inputs (`with:`): `app-name` (Default: Repo-Name in Kleinbuchstaben), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
 
 ### 4. Digest in `appstore.yaml` eintragen (Henne-Ei-Problem)
 Der Vertrag verlangt `@sha256:`-Digests, der Digest existiert aber erst nach dem Build. Ablauf:
@@ -118,7 +122,13 @@ runtime: pods              # pods | vm
 description: "Mindestens zehn Zeichen, maximal 300."
 ```
 
-Der Check `validate-registry` prueft Schema, Dateiname, dass das Repo erreichbar und **oeffentlich** ist und dass auf dem Default-Branch `appstore.yaml` (pods) bzw. `terraform/` + `packer/` (vm) liegen.
+Der Check `validate-registry` prueft
+- Schema, Dateiname, kein Repo doppelt eingetragen,
+- das Repo ist erreichbar, **oeffentlich** und nicht archiviert, und hat ein Versions-Tag,
+- `pods`: `appstore.yaml` liegt auf dem Default-Branch, erfuellt den Vertrag **streng** (Digest-Pflicht), heisst wie der Eintrag, hat `runtime: kubernetes`, und jedes Image ist ohne Zugangsdaten von ghcr.io ziehbar (Paket auf *Public*),
+- `vm`: `terraform/` + `packer/` liegen dort und `appstore.yaml` **nicht** (das Backend behandelt eine Version mit `appstore.yaml` als Pods).
+
+Alle diese Pruefungen gelten fuer den Default-Branch **und** das neueste Versions-Tag (`vX.Y.Z`), denn das Backend liest `appstore.yaml` an dem Commit, auf den das eingereichte Tag zeigt; ohne Versions-Tag schlaegt der Check fehl. Er laeuft auch woechentlich ueber alle Eintraege.
 
 ## Wie Versionen wirklich in den AppStore kommen (recherchiert im Backend, Branch `dev`)
 
@@ -126,7 +136,7 @@ Der Check `validate-registry` prueft Schema, Dateiname, dass das Repo erreichbar
 |---|---|---|
 | App anlegen | `POST /apps/` (Dozent/Admin) (`git_link`, `submit_all_versions`) | Keycloak-Bearer-Token eines Nutzers |
 | Version einreichen | `POST /apps/{app_id}/versions/{tag}/submit` | Owner der App oder Admin |
-| Freigeben / Ablehnen / Widerrufen | `POST /apps/{app_id}/versions/{tag}/approve\|reject\|revoke` | nur Admin (`require_admin`) |
+| Freigeben / Ablehnen / Widerrufen | `POST /admin/apps/{app_id}/versions/{tag}/approve\|reject\|revoke` (`reject` und `revoke` brauchen `{"rejection_reason": "..."}`) | nur Admin (`require_admin`) |
 
 - Das Backend kennt nur **Nutzer-Tokens** (Keycloak, `OIDC_ALLOWED_CLIENTS=appstore-frontend`, plus kurzlebige LTI-Session-Tokens). Es gibt **keine Service-Tokens / API-Keys** und keinen Webhook, der Versionen automatisch registriert.
 - Keycloak-Nutzer-Tokens laufen nach Minuten ab und gehoeren einer Person; sie als GitHub-Secret abzulegen ist weder haltbar noch sicher.
@@ -137,8 +147,12 @@ Der Check `validate-registry` prueft Schema, Dateiname, dass das Repo erreichbar
 
 ```bash
 pip install pyyaml jsonschema
+python -m unittest discover -s tests -v              # Selbsttests (Validator, Eintrags-Pruefung)
 python scripts/validate_appstore_yaml.py tests/fixtures/valid.appstore.yaml
-python scripts/check_entry.py apps/*.yaml            # braucht Internet; --offline nur Schema
+python scripts/check_entry.py apps/*.yaml            # braucht Internet; --offline nur Schema, Dateiname, Duplikate
+python scripts/check_action_refs.py                  # loest alle uses:-Versionen der Workflows auf (Internet)
 ```
 
-`main` ist per PR geschuetzt; Reviews sind nicht zwingend. Der Validator spiegelt `app/k8s/spec.py` (Backend `dev`); aendert sich der Vertrag dort, muss `scripts/validate_appstore_yaml.py` nachgezogen werden.
+`main` ist per PR geschuetzt; Reviews sind nicht zwingend und die Checks sind keine Pflicht-Checks (Branch-Schutz, Einstellung in GitHub). Der Validator spiegelt `app/k8s/spec.py` (Backend `dev`); aendert sich der Vertrag dort, muss `scripts/validate_appstore_yaml.py` nachgezogen werden. Der Workflow `contract-drift` merkt das (woechentlich und bei Aenderungen am Validator): er laesst Validator und Backend-Parser dieselben verfaelschten Dateien bewerten und schlaegt bei abweichendem Urteil fehl. Bekannte Aenderung in Arbeit: Backend-Branch `feat/resource-overrides` fuehrt `resourceBounds` ein; nach dem Merge in `dev` schlaegt der Check fehl, bis der Validator das Feld kennt.
+
+Lokaler Drift-Test: `spec.py` aus dem Backend holen (`pip install pydantic`), dann `BACKEND_SPEC_PY=<pfad>/spec.py python -m unittest discover -s tests -p test_contract_drift.py`.

@@ -10,7 +10,7 @@ Eine Datei pro App: `apps/<name>.yaml`. Der Dateiname ist der App-Name.
 | `runtime` | ja | `pods` (Kubernetes, `appstore.yaml`) oder `vm` (OpenStack, `terraform/` + `packer/`) |
 | `description` | ja | 10-300 Zeichen |
 
-Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Neue App eintragen: PR mit einer neuen Datei; der Check `validate-registry` prueft Schema, Erreichbarkeit/Sichtbarkeit des Repos und die Vertragsdateien auf dem Default-Branch.
+Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Neue App eintragen: PR mit einer neuen Datei; der Check `validate-registry` prueft Schema, Erreichbarkeit/Sichtbarkeit des Repos, die Vertragsdateien auf dem Default-Branch (bei `pods` auch den Inhalt von `appstore.yaml` und ob die Images oeffentlich ziehbar sind) und dass kein Repo doppelt eingetragen ist.
 
 Lokal pruefen: `python scripts/check_entry.py apps/<name>.yaml`.
 

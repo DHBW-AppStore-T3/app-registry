@@ -63,6 +63,42 @@ def mem_mi(v: object) -> int | None:
     return int(m.group(1)) * (1024 if m.group(2) == "Gi" else 1) if m else None
 
 
+def as_int(v: object) -> int | None:
+    """An int the way pydantic's lax mode reads it: ints, integral floats and digit strings (not bools)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    if isinstance(v, str) and re.fullmatch(r"\s*[+-]?\d+\s*", v):
+        return int(v)
+    return None
+
+
+def is_str(v: object) -> bool:
+    return isinstance(v, str)
+
+
+def need_str(e: Errors, loc: str, v: object) -> bool:
+    """Report a non-string (pydantic ``str`` fields reject numbers, e.g. an unquoted ``cpu: 1``)."""
+    if is_str(v):
+        return True
+    hint = " (quote it)" if isinstance(v, (int, float)) and not isinstance(v, bool) else ""
+    e.add(loc, f"must be a string{hint}")
+    return False
+
+
+def need_str_list(e: Errors, loc: str, v: object) -> list[str]:
+    """Report a non-list or non-string items; returns the valid string items."""
+    if not isinstance(v, list):
+        e.add(loc, "must be a list")
+        return []
+    for i, item in enumerate(v):
+        need_str(e, f"{loc}[{i}]", item)
+    return [item for item in v if is_str(item)]
+
+
 def check_path(e: Errors, loc: str, p: object, ingress: bool = False) -> None:
     if not isinstance(p, str) or not p.startswith("/") or len(p) > 255:
         return e.add(loc, "must be an absolute path of at most 255 characters")
@@ -130,10 +166,10 @@ def check_container(e: Errors, loc: str, c: object, allow_tags: bool) -> bool:
     if not only_keys(e, loc, c, {"name", "image", "expose", "resources", "resourceBounds", "env", "writablePaths"},
                      {"name", "image", "resources"}):
         return False
-    if isinstance(c.get("name"), str) and not NAME_RE.match(c["name"]):
+    if "name" in c and need_str(e, f"{loc}.name", c["name"]) and not NAME_RE.match(c["name"]):
         e.add(f"{loc}.name", f"invalid container name {c['name']!r} (lowercase letters, digits, '-')")
     img = c.get("image")
-    if isinstance(img, str):
+    if "image" in c and need_str(e, f"{loc}.image", img):
         if not IMAGE_DIGEST_RE.match(img):
             if allow_tags and IMAGE_TAG_RE.match(img):
                 e.warn(f"{loc}.image", "tag instead of digest: allowed in CI only, the AppStore requires @sha256:<digest>")
@@ -141,23 +177,21 @@ def check_container(e: Errors, loc: str, c: object, allow_tags: bool) -> bool:
                 e.add(f"{loc}.image", "image must be pinned by digest: <registry>/<repo>@sha256:<64 hex> (tags are not allowed)")
         if not img.startswith(REGISTRY_PREFIX):
             e.add(f"{loc}.image", f"registry not allowed (allowed prefixes: {REGISTRY_PREFIX})")
-    elif "image" in c:
-        e.add(f"{loc}.image", "must be a string")
     expose = c.get("expose")
     if expose is not None and only_keys(e, f"{loc}.expose", expose, {"port", "path"}, {"port"}):
-        port = expose.get("port")
-        if not isinstance(port, int) or isinstance(port, bool) or not 1024 <= port <= 65535:
+        port = as_int(expose.get("port"))
+        if port is None or not 1024 <= port <= 65535:
             e.add(f"{loc}.expose.port", "must be an integer between 1024 and 65535")
         check_path(e, f"{loc}.expose.path", expose.get("path", "/"), ingress=True)
     res = c.get("resources")
     if only_keys(e, f"{loc}.resources", res, {"cpu", "memory", "requests"}, {"cpu", "memory"}):
         cpu, mem = cpu_m(res.get("cpu")), mem_mi(res.get("memory"))
         if "cpu" in res and cpu is None:
-            e.add(f"{loc}.resources.cpu", "invalid CPU quantity (use e.g. '500m' or '1')")
+            e.add(f"{loc}.resources.cpu", "invalid CPU quantity (a quoted string, e.g. '500m' or '1')")
         elif cpu is not None and cpu > MAX_CPU_M:
             e.add(f"{loc}.resources.cpu", f"exceeds platform limit of {MAX_CPU_M}m")
         if "memory" in res and mem is None:
-            e.add(f"{loc}.resources.memory", "invalid memory quantity (use e.g. '512Mi' or '1Gi')")
+            e.add(f"{loc}.resources.memory", "invalid memory quantity (a quoted string, e.g. '512Mi' or '1Gi')")
         elif mem is not None and mem > MAX_MEM_MI:
             e.add(f"{loc}.resources.memory", f"exceeds platform limit of {MAX_MEM_MI}Mi")
         rq = res.get("requests")
@@ -179,20 +213,19 @@ def check_container(e: Errors, loc: str, c: object, allow_tags: bool) -> bool:
         l = f"{loc}.env[{i}]"
         if not only_keys(e, l, v, {"name", "from", "value"}, {"name"}):
             continue
-        if not isinstance(v["name"], str) or not ENV_RE.match(v["name"]):
+        if "name" in v and need_str(e, f"{l}.name", v["name"]) and not ENV_RE.match(v["name"]):
             e.add(f"{l}.name", f"invalid environment variable name {v['name']!r}")
-        if ("from" in v) == ("value" in v):
+        if (v.get("from") is None) == (v.get("value") is None):
             e.add(l, "exactly one of 'from' and 'value' is required")
-        if "from" in v and v["from"] not in ("generated-password", "team-name", "user-name"):
+        if v.get("from") is not None and v["from"] not in ("generated-password", "team-name", "user-name"):
             e.add(f"{l}.from", "must be one of generated-password, team-name, user-name")
-    wp = c.get("writablePaths", [])
-    if not isinstance(wp, list):
-        e.add(f"{loc}.writablePaths", "must be a list")
-    else:
-        for i, p in enumerate(wp):
-            check_path(e, f"{loc}.writablePaths[{i}]", p)
-        if len(set(map(str, wp))) != len(wp):
-            e.add(f"{loc}.writablePaths", "writablePaths must be unique")
+        if v.get("value") is not None:
+            need_str(e, f"{l}.value", v["value"])
+    wp = need_str_list(e, f"{loc}.writablePaths", c.get("writablePaths", []))
+    for i, p in enumerate(wp):
+        check_path(e, f"{loc}.writablePaths[{i}]", p)
+    if len(set(wp)) != len(wp):
+        e.add(f"{loc}.writablePaths", "writablePaths must be unique")
     return True
 
 
@@ -200,28 +233,35 @@ def check_variable(e: Errors, loc: str, v: object) -> None:
     if not only_keys(e, loc, v, {"name", "type", "scope", "ext", "maxSize", "mountPath", "values", "default"},
                      {"name", "type"}):
         return
-    if isinstance(v.get("name"), str) and not NAME_RE.match(v["name"].replace("_", "-")):
+    if "name" in v and need_str(e, f"{loc}.name", v["name"]) and not NAME_RE.match(v["name"].replace("_", "-")):
         e.add(f"{loc}.name", f"invalid variable name {v['name']!r}")
     if v.get("type") not in ("file", "enum", "string"):
         e.add(f"{loc}.type", "must be one of file, enum, string")
     if v.get("scope", "deployment") not in ("deployment", "team"):
         e.add(f"{loc}.scope", "must be deployment or team")
+    need_str_list(e, f"{loc}.ext", v.get("ext", []))
+    values = need_str_list(e, f"{loc}.values", v.get("values", []))
+    if "default" in v and v["default"] is not None:
+        need_str(e, f"{loc}.default", v["default"])
     if v.get("type") == "file":
-        if not v.get("mountPath"):
+        mp = v.get("mountPath")
+        if not mp:
             e.add(f"{loc}.mountPath", "file variables need an absolute mountPath")
-        else:
-            check_path(e, f"{loc}.mountPath", v["mountPath"])
+        elif need_str(e, f"{loc}.mountPath", mp):
+            check_path(e, f"{loc}.mountPath", mp)
         ms = v.get("maxSize")
-        if ms is not None:
-            m = SIZE_RE.match(str(ms))
+        if ms is not None and need_str(e, f"{loc}.maxSize", ms):
+            m = SIZE_RE.match(ms)
             if not m:
-                e.add(f"{loc}.maxSize", "invalid size (use e.g. '5Mi')")
+                e.add(f"{loc}.maxSize", "invalid size (use e.g. '1Mi')")
             elif int(m.group(1)) * {"Ki": 1024, "Mi": 1024**2, "Gi": 1024**3}[m.group(2)] > MAX_FILE_VARIABLE_BYTES:
                 e.add(f"{loc}.maxSize", "maxSize above 1Mi is not supported yet (Secret mount limit)")
+    elif "maxSize" in v and v["maxSize"] is not None:
+        need_str(e, f"{loc}.maxSize", v["maxSize"])
     if v.get("type") == "enum":
         if not v.get("values"):
             e.add(f"{loc}.values", "enum variables need 'values'")
-        elif v.get("default") is not None and v["default"] not in v["values"]:
+        elif is_str(v.get("default")) and v["default"] not in values:
             e.add(f"{loc}.default", "default must be one of 'values'")
 
 
@@ -232,17 +272,22 @@ def check_access(e: Errors, loc: str, a: object) -> None:
         t = a.get("template")
         if not t:
             e.add(loc, "url access needs 'template'")
-        elif not isinstance(t, str) or not t.startswith("https://"):
-            e.add(f"{loc}.template", "url access must start with 'https://'")
-        else:
-            placeholders(e, f"{loc}.template", t, URL_PLACEHOLDERS)
+        elif need_str(e, f"{loc}.template", t):
+            if not t.startswith("https://"):
+                e.add(f"{loc}.template", "url access must start with 'https://'")
+            else:
+                placeholders(e, f"{loc}.template", t, URL_PLACEHOLDERS)
     elif a.get("type") == "password":
         if a.get("from") != "generated-password":
             e.add(loc, "password access needs 'from: generated-password'")
-        if a.get("username"):
-            placeholders(e, f"{loc}.username", str(a["username"]), USER_PLACEHOLDERS)
+        if is_str(a.get("username")):
+            placeholders(e, f"{loc}.username", a["username"], USER_PLACEHOLDERS)
     else:
         e.add(f"{loc}.type", "must be url or password")
+    if a.get("type") != "password" and a.get("from") not in (None, "generated-password"):
+        e.add(f"{loc}.from", "must be generated-password")
+    if a.get("username") is not None:
+        need_str(e, f"{loc}.username", a["username"])
 
 
 def validate(data: object, allow_tags: bool = False) -> Errors:
@@ -252,7 +297,7 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
         return e
     if data.get("apiVersion") != "appstore/v2":
         e.add("apiVersion", "must be 'appstore/v2'")
-    if isinstance(data.get("name"), str) and not NAME_RE.match(data["name"]):
+    if "name" in data and need_str(e, "name", data["name"]) and not NAME_RE.match(data["name"]):
         e.add("name", f"invalid app name {data['name']!r} (lowercase letters, digits, '-')")
     runtime = data.get("runtime")
     if runtime not in ("kubernetes", "openstack-vm"):
@@ -278,8 +323,8 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
                 e.add("workload.containers", f"at most {MAX_CONTAINERS} containers")
             ok = [check_container(e, f"workload.containers[{i}]", c, allow_tags) for i, c in enumerate(containers)]
             if all(ok):
-                names = [c.get("name") for c in containers]
-                if len(set(map(str, names))) != len(names):
+                names = [c.get("name") for c in containers if is_str(c.get("name"))]
+                if len(set(names)) != len(names):
                     e.add("workload.containers", "container names must be unique")
                 if sum(c.get("expose") is not None for c in containers) != 1:
                     e.add("workload.containers", "exactly one container must set 'expose'")
@@ -301,15 +346,16 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
     for i, v in enumerate(variables):
         check_variable(e, f"variables[{i}]", v)
     vd = [v for v in variables if isinstance(v, dict)]
-    names = [v.get("name") for v in vd]
-    if len(set(map(str, names))) != len(names):
+    names = [v["name"] for v in vd if is_str(v.get("name"))]
+    if len(set(names)) != len(names):
         e.add("variables", "variable names must be unique")
-    files = [v["mountPath"] for v in vd if v.get("type") == "file" and v.get("mountPath")]
+    files = [v["mountPath"] for v in vd if v.get("type") == "file" and is_str(v.get("mountPath"))]
     if len(set(files)) != len(files):
         e.add("variables", "file variables need distinct mountPaths")
     exposed = next((c for c in containers if isinstance(c, dict) and c.get("expose")), None)
-    taken = set(exposed.get("writablePaths", []) if exposed and isinstance(exposed.get("writablePaths"), list) else [])
-    if isinstance(storage, dict) and storage.get("mountPath"):
+    wpaths = exposed.get("writablePaths") if exposed else None
+    taken = {p for p in wpaths if is_str(p)} if isinstance(wpaths, list) else set()
+    if isinstance(storage, dict) and is_str(storage.get("mountPath")):
         taken.add(storage["mountPath"])
     if taken & set(files):
         e.add("variables", "a file variable's mountPath is already used by writablePaths or storage")
