@@ -1,8 +1,10 @@
 name: validate-registry
 
 on:
+  # Kein paths-Filter bei Pull Requests: diese Jobs sind Pflicht-Checks fuer main. Ein Pflicht-Check, dessen
+  # Workflow wegen des Filters gar nicht startet (z.B. bei einer reinen README-Aenderung), bleibt "erwartet"
+  # und blockiert den Merge. Nicht betroffene Eintraege werden ohnehin uebersprungen (siehe "Geaenderte Eintraege").
   pull_request:
-    paths: ["apps/**", "schema/**", "scripts/**", "tests/**", "templates/**", ".github/workflows/**"]
   push:
     branches: [main]
     paths: ["apps/**", "schema/**", "scripts/**", "tests/**", "templates/**", ".github/workflows/**"]
