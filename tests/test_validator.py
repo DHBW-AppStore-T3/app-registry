@@ -121,6 +121,17 @@ class Contract(unittest.TestCase):
             self.c["expose"]["port"] = bad
             self.assertEqual(locs(self.doc), {"workload.containers[0].expose.port"}, bad)
 
+    def test_expose_path_other_than_root_warns(self):
+        # Web-LaTeX used `/login` as a start page: the ingress then routed only /login and the editor answered 404.
+        self.c["expose"]["path"] = "/login"
+        result = v.validate(self.doc)
+        self.assertEqual(result.items, [])
+        self.assertEqual([loc for loc, _ in result.warnings], ["workload.containers[0].expose.path"])
+        self.c["expose"]["path"] = "/"
+        self.assertEqual(v.validate(self.doc).warnings, [])
+        del self.c["expose"]["path"]
+        self.assertEqual(v.validate(self.doc).warnings, [])
+
     def test_vm_runtime_has_no_workload(self):
         self.doc["runtime"] = "openstack-vm"
         self.assertEqual(locs(self.doc), {"workload"})
