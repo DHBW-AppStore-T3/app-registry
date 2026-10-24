@@ -296,7 +296,8 @@ def check_access(e: Errors, loc: str, a: object) -> None:
 
 def validate(data: object, allow_tags: bool = False) -> Errors:
     e = Errors()
-    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "egress", "variables", "access"},
+    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "egress", "podNetwork", "userChoices", "variables",
+                   "access"},
                      {"apiVersion", "name", "runtime"}):
         return e
     if data.get("apiVersion") != "appstore/v2":
@@ -310,6 +311,15 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
         e.add("scope", "must be team or user")
     if data.get("egress", "none") not in ("none", "internet"):
         e.add("egress", "must be none or internet")
+    # Defaults of the author for the pod network, and which of the two network settings
+    # (internet, podNetwork) the person deploying may switch (issue .github#11).
+    if data.get("podNetwork", "none") not in ("none", "namespace"):
+        e.add("podNetwork", "must be none or namespace")
+    choices = data.get("userChoices")
+    if choices is not None and only_keys(e, "userChoices", choices, {"internet", "podNetwork"}):
+        for key, value in choices.items():
+            if not isinstance(value, bool):
+                e.add(f"userChoices.{key}", "must be true or false")
     wl = data.get("workload")
     if runtime == "kubernetes" and wl is None:
         e.add("workload", "runtime 'kubernetes' requires 'workload'")
