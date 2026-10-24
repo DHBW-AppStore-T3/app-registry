@@ -58,12 +58,13 @@ Kopiere [`templates/app-ci-caller.yml`](templates/app-ci-caller.yml) nach `.gith
 ```yaml
 jobs:
   app:
-    uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@main
+    uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@v1
     with:
+      registry-ref: v1
       images: '[{"suffix":"","context":"image","dockerfile":"image/Dockerfile","smoke_test":".github/smoke-test.sh"}]'
 ```
 
-Die Vorlage baut und pusht nur bei Aenderungen unter `image/` (wie die bestehenden Apps), Pull Requests bauen und pruefen nur.
+Die Vorlage baut und pusht nur bei Aenderungen unter `image/` (wie die bestehenden Apps), Pull Requests bauen und pruefen nur. Zusaetzlich laeuft woechentlich ein Lauf ohne Push, der das Image neu baut und mit Trivy scannt: die Schwachstellen-Datenbank aendert sich auch dann, wenn der Code gleich bleibt.
 
 Die Pipeline macht:
 1. **validate** - `appstore.yaml` gegen den Vertrag.
@@ -79,7 +80,15 @@ Optionale Inputs (`with:`): `registry-ref` (siehe *Pinnen*),  `app-name` (Defaul
 Wer seinen eigenen Build behaelt, bindet nur [`templates/spec-check-caller.yml`](templates/spec-check-caller.yml) (`validate-spec.yml`) ein: `appstore.yaml` gegen den Vertrag (streng, Digest-Pflicht) und die Pruefung, dass jedes gepinnte Image anonym von ghcr.io gezogen werden kann, ohne zu bauen.
 
 #### Pinnen
-`@main` heisst: jede Aenderung hier gilt sofort fuer jede App-CI, auch eine kaputte. Ein Aufrufer kann auf ein Release-Tag dieses Repos pinnen (`app-ci.yml@v1`). Dann muss auch der Validator aus diesem Stand kommen, weil die Pipeline ihn selbst aus diesem Repo holt: `registry-ref: v1` in `with:` setzen. Ein Release-Tag legt jemand mit Schreibrecht nach dem Merge an (`git tag v1.0.0 && git tag -f v1 && git push origin v1.0.0 v1 -f`; `v1` wandert mit kompatiblen Updates mit, `v1.0.0` nicht).
+`@main` heisst: jede Aenderung hier gilt beim naechsten Lauf sofort fuer jede App-CI, auch eine kaputte. Die Vorlagen nutzen deshalb das Release-Tag `v1` (`app-ci.yml@v1`). GitHub loest `@v1` bei jedem Lauf auf den Commit auf, auf den das Tag zeigt; Aenderungen an `main` erreichen die Apps erst, wenn `v1` weitergeschoben wird. Weil die Pipeline den Validator selbst aus diesem Repo holt, muss auch er aus diesem Stand kommen: `registry-ref: v1` in `with:` (Pflicht zusammen mit dem Pinnen, sonst laufen Pipeline und Validator in verschiedenen Staenden).
+
+Releases schneidet jemand mit Schreibrecht nach dem Merge: kompatible Aenderungen (Bugfixes, neue optionale Inputs) bekommen ein neues `v1.x.y` und `v1` wird darauf verschoben, inkompatible ein neues Major (`v2`), das Apps bewusst uebernehmen:
+
+```bash
+git tag -a v1.1.0 -m "..." <commit> && git tag -fa v1 -m "..." <commit> && git push origin v1.1.0 && git push -f origin v1
+```
+
+`v1.0.0` ist der erste Stand mit Smoke-Test-Hook, `registry-ref` und `validate-spec.yml`. Wer es ganz unveraenderlich will, pinnt auf einen Commit-SHA (`app-ci.yml@<sha>` und `registry-ref: <sha>`).
 
 ### 4. Digest in `appstore.yaml` eintragen (Henne-Ei-Problem)
 Der Vertrag verlangt `@sha256:`-Digests, der Digest existiert aber erst nach dem Build. Ablauf:

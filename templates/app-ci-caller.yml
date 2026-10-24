@@ -2,7 +2,8 @@
 # Gepusht wird nur, wenn sich das Image aendert (wie bei den bestehenden Apps): ein Push bei einem reinen
 # appstore.yaml-Commit wuerde den :<sha>-Tag auf ein neues Image setzen, das nicht zum eingetragenen Digest passt.
 # Pull Requests bauen und pruefen nur (auch bei appstore.yaml), pushen nie. Aenderungen an appstore.yaml im Push
-# prueft templates/spec-check-caller.yml.
+# prueft templates/spec-check-caller.yml. Der Wochenlauf baut und scannt nur (kein Push): neue Schwachstellen in
+# Basisimages tauchen auf, auch wenn sich am Code nichts geaendert hat.
 name: ci
 on:
   push:
@@ -11,16 +12,20 @@ on:
   pull_request:
     branches: [main, dev]
     paths: ["image/**", "appstore.yaml", ".github/workflows/ci.yml", ".github/smoke-test.sh", ".trivyignore"]
+  schedule:
+    - cron: "0 5 * * 1"
   workflow_dispatch:
 permissions: { contents: read, packages: write }
 jobs:
   app:
-    # Pinnen: @main durch ein Release-Tag ersetzen (z.B. @v1) und unten `registry-ref` auf dasselbe Tag setzen.
-    uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@main
+    # @v1 ist ein Release-Tag dieses Repos (wandert nur mit kompatiblen Updates mit). `registry-ref` muss dasselbe Tag
+    # sein, sonst kommt der Validator aus einem anderen Stand als die Pipeline.
+    uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@v1
     with:
+      registry-ref: v1
+      push: ${{ github.event_name != 'schedule' }}
       # Ein Image: image/Dockerfile. Mehrere (z.B. pgAdmin): je Eintrag suffix, context, dockerfile.
       # smoke_test ist optional: Skript, das das Image im Sicherheitskontext der Plattform startet (siehe
       # smoke-test-example.sh). Ohne Eintrag wird nur gebaut, gelintet und gescannt.
       images: '[{"suffix":"","context":"image","dockerfile":"image/Dockerfile","smoke_test":".github/smoke-test.sh"}]'
       strict-image-pin: true   # appstore.yaml ist schon mit Digest gepinnt; nur beim allerersten Build false
-      # registry-ref: main
