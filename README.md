@@ -21,7 +21,7 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 |---|---|---|---|
 | pgadmin | pods | `v2.0.0` | zwei Container (pgAdmin + PostgreSQL/Pagila), Team-Scope |
 | jupyter-notebook | pods | `v2.0.0` | JupyterLab pro Person, Egress `internet` |
-| web-latex | pods | `v2.0.0` | Editor pro Person, Startpfad `/login`, optionale Starter-ZIP |
+| web-latex | pods | `v2.0.0` | Editor pro Person, optionale Starter-ZIP. Achtung: `v2.0.0` und `v2.0.1` sind auf dem Cluster nicht benutzbar (der Ingress routet nur `/login`), Fix in Web-LaTeX#6 als `v2.0.2` |
 | online-ide | pods | `v2.0.0` | code-server pro Person |
 | windows-matlab-app | pods | - | in Entwicklung (`status: development`): Wine-Desktop mit MATLAB, vCPU/RAM per `resourceBounds` waehlbar; noch kein Versions-Tag, Image per Tag statt Digest |
 | template-app | pods | `v2.0.0` | Vorlage (nginx); `terraform/` + `packer/` liegen noch im Repo, zaehlen aber nicht (`appstore.yaml` macht die Version zum Pods-Release) |
@@ -40,7 +40,7 @@ Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide und pgadmin sind
 Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `app/k8s/spec.py` im Backend):
 - Unbekannte Felder werden abgelehnt; Security-Kontext, NetworkPolicy, RBAC kann die App nicht setzen.
 - `image` muss mit **Digest** gepinnt sein, Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/` erlaubt. Konvention fuer App-Images: `ghcr.io/dhbw-appstore-t3/apps/<app>@sha256:<64 hex>` (die Plattform-Images `backend`, `worker`, `frontend` liegen eine Ebene darueber).
-- Genau ein Container hat `expose` (Port 1024-65535). Max. 3 Container, Storage max. 20 Gi, je Container max. 4 CPU / 8192 Mi (Obergrenzen der Plattform, `podApps.maxCpu/maxMemory` im Helm-Chart; Stand dieses Repos: siehe Hinweis unten).
+- Genau ein Container hat `expose` (Port 1024-65535). `expose.path` ist die **Ingress-Route** (Prefix-Match), kein Startpfad: nur dieser Pfad und alles darunter erreicht die App, normalerweise also `/`. Der Validator warnt bei allem anderen. Max. 3 Container, Storage max. 20 Gi, je Container max. 4 CPU / 8192 Mi (Obergrenzen der Plattform, `podApps.maxCpu/maxMemory` im Helm-Chart; Stand dieses Repos: siehe Hinweis unten).
 - Optional `resourceBounds` je Container (`cpu` und `memory` mit `min`/`max`): der Bereich, aus dem Nutzer beim Deployen waehlen; `resources` sind der Standardwert und muessen darin liegen, `max` darf die Obergrenzen nicht uebersteigen.
 - `egress: none` (Default) oder `internet`.
 

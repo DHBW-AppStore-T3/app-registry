@@ -183,6 +183,10 @@ def check_container(e: Errors, loc: str, c: object, allow_tags: bool) -> bool:
         if port is None or not 1024 <= port <= 65535:
             e.add(f"{loc}.expose.port", "must be an integer between 1024 and 65535")
         check_path(e, f"{loc}.expose.path", expose.get("path", "/"), ingress=True)
+        if expose.get("path", "/") != "/" and is_str(expose.get("path")):
+            e.warn(f"{loc}.expose.path", "only this path and below is routed to the app (the platform writes it as the "
+                   "ingress path, prefix match): '/' unless the whole app really lives below it. A start page is "
+                   "not what this field is for.")
     res = c.get("resources")
     if only_keys(e, f"{loc}.resources", res, {"cpu", "memory", "requests"}, {"cpu", "memory"}):
         cpu, mem = cpu_m(res.get("cpu")), mem_mi(res.get("memory"))
