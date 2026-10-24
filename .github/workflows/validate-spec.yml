@@ -20,9 +20,9 @@ on:
         type: boolean
         default: true
       registry-ref:
-        description: "Ref von DHBW-AppStore-T3/app-registry, aus dem die Skripte geholt werden (bei gepinntem Workflow dasselbe Tag)"
+        description: "Optional. Ref von DHBW-AppStore-T3/app-registry, aus dem die Skripte geholt werden. Leer (Standard): der Commit, aus dem dieser Workflow geladen wurde."
         type: string
-        default: main
+        default: ""
 
 permissions:
   contents: read
@@ -32,13 +32,13 @@ jobs:
     name: appstore.yaml pruefen
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: DHBW-AppStore-T3/app-registry
-          ref: ${{ inputs.registry-ref }}
+          ref: ${{ inputs.registry-ref || job.workflow_sha }}
           path: .app-registry
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml jsonschema

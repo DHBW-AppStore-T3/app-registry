@@ -1,0 +1,9 @@
+# Haelt die auf Commits gepinnten Actions aktuell (der Kommentar "# v7" hinter dem Commit wird mit angepasst).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"

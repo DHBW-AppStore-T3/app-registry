@@ -35,10 +35,11 @@ on:
         default: true
       registry-ref:
         description: >-
-          Ref von DHBW-AppStore-T3/app-registry, aus dem der Validator geholt wird. Wird der Workflow selbst auf ein Tag
-          gepinnt (app-ci.yml@v1), hier dasselbe Tag eintragen, sonst laufen Pipeline und Validator in verschiedenen Staenden.
+          Optional. Ref von DHBW-AppStore-T3/app-registry, aus dem der Validator geholt wird. Leer (Standard): derselbe
+          Commit, aus dem dieser Workflow geladen wurde (job.workflow_sha), Pipeline und Validator sind also immer im
+          selben Stand. Nur fuer Sonderfaelle setzen.
         type: string
-        default: main
+        default: ""
     outputs:
       digest:
         description: "Digest des (alphabetisch) ersten Images, bei einem Image dieses (sha256:...)"
@@ -63,13 +64,13 @@ jobs:
     name: appstore.yaml validieren
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: DHBW-AppStore-T3/app-registry
-          ref: ${{ inputs.registry-ref }}
+          ref: ${{ inputs.registry-ref || job.workflow_sha }}
           path: .app-registry
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml
@@ -91,8 +92,8 @@ jobs:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: hadolint/hadolint-action@v3.5.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: ${{ matrix.image.dockerfile }}
           failure-threshold: warning
@@ -109,7 +110,7 @@ jobs:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Image-Namen berechnen
         id: meta
@@ -133,10 +134,10 @@ jobs:
           [ "$IS_MAIN" = "true" ] && tags="$tags"$'\n'"$image:latest"
           { echo "tags<<EOF"; echo "$tags"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build (lokal, fuer den Scan)
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ matrix.image.context }}
           file: ${{ matrix.image.dockerfile }}
@@ -170,7 +171,7 @@ jobs:
 
       - name: Login ghcr.io
         if: inputs.push && github.event_name != 'pull_request'
-        uses: docker/login-action@v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -179,7 +180,7 @@ jobs:
       - name: Push
         id: push
         if: inputs.push && github.event_name != 'pull_request'
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ matrix.image.context }}
           file: ${{ matrix.image.dockerfile }}
@@ -205,7 +206,7 @@ jobs:
             echo "In appstore.yaml eintragen: \`image: $IMAGE@$DIGEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: steps.push.outcome == 'success'
         with:
           name: digest-${{ steps.meta.outputs.key }}
@@ -222,7 +223,7 @@ jobs:
       digests: ${{ steps.merge.outputs.digests }}
       image: ${{ steps.merge.outputs.image }}
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: digest-*
           path: digests

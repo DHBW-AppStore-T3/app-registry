@@ -21,10 +21,10 @@ jobs:
     name: Registry-Eintraege pruefen
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml jsonschema
@@ -56,8 +56,8 @@ jobs:
     name: Selbsttests (Validator, Eintrags-Pruefung)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml jsonschema
@@ -69,13 +69,14 @@ jobs:
     name: Workflows pruefen (actionlint, Action-Versionen)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
       - run: pip install --quiet pyyaml jsonschema
       - name: actionlint
-        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+        # job.workflow_sha (Commit des Workflows selbst, siehe app-ci.yml) kennt actionlint 1.7.12 noch nicht: Fehlalarm.
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color -ignore 'property "workflow_sha" is not defined'
       - name: shellcheck (Vorlagen)
         run: shellcheck templates/*.sh
       - name: uses:-Referenzen aufloesen
