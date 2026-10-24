@@ -1,0 +1,43 @@
+access:
+- template: https://{workload}-{deployment}.{domain}
+  type: url
+- from: generated-password
+  type: password
+  username: '{user}'
+apiVersion: appstore/v2
+egress: internet
+name: windows-matlab-app
+podNetwork: all
+runtime: kubernetes
+scope: user
+userChoices:
+  internet: 1
+  x: true
+workload:
+  containers:
+  - env:
+    - from: generated-password
+      name: VNC_PASSWORD
+    expose:
+      path: /
+      port: 8080
+    image: ghcr.io/dhbw-appstore-t3/apps/windows-matlab-app@sha256:1246b6898aecfacdffcf857f350208a722baff582d0b110dca22275fc5a96375
+    name: desktop
+    resourceBounds:
+      cpu:
+        max: '4'
+        min: '1'
+      memory:
+        max: 8Gi
+        min: 2Gi
+    resources:
+      cpu: '2'
+      memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+    writablePaths:
+    - /tmp
+  storage:
+    mountPath: /home/wine
+    size: 20Gi
