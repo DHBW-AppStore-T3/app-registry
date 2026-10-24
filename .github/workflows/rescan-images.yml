@@ -1,0 +1,61 @@
+name: rescan-images
+
+# Woechentlich die Images neu scannen, die der Katalog wirklich ausrollt: appstore.yaml auf dem neuesten Versions-Tag
+# (das freigegebene, ausgerollte) und auf dem Default-Branch (das naechste Release) jeder freigegebenen Pods-App.
+# app-ci scannt ein Image nur beim Bauen; eine spaeter veroeffentlichte CVE bliebe in einer freigegebenen Version
+# sonst unbemerkt (Review S5). Ein roter Lauf heisst: neu bauen, neuen Tag schneiden, einreichen, freigeben.
+on:
+  schedule:
+    - cron: "37 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    name: Images des Katalogs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml jsonschema
+      - id: list
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          matrix="$(python scripts/catalog_images.py apps/*.yaml)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "$matrix" | python -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | python -c 'import json,sys; [print(r["app"], r["ref"], r["image"]) for r in json.load(sys.stdin)["include"]]' >> "$GITHUB_STEP_SUMMARY"
+
+  scan:
+    name: ${{ matrix.app }} (${{ matrix.ref }})
+    needs: list
+    if: needs.list.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.list.outputs.matrix) }}
+    steps:
+      - name: Trivy-Ausnahmen der App auf diesem Stand
+        env:
+          URL: ${{ matrix.trivyignore }}
+        run: |
+          : > .trivyignore
+          if [ -n "$URL" ]; then curl -fsSL "$URL" -o .trivyignore; fi
+          echo "Ausnahmen: $(grep -cv '^\s*\(#\|$\)' .trivyignore || true)"
+      - name: Trivy-Scan (behebbare HIGH/CRITICAL machen den Lauf rot)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          vuln-type: os,library
+          trivyignores: .trivyignore
