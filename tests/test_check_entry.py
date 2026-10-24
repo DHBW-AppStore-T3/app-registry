@@ -148,6 +148,21 @@ class CheckEntry(unittest.TestCase):
         self.assertEqual(len(errs), 1)
         self.assertIn("exists on tag v2.0.0", errs[0])
 
+    def test_development_entry_needs_no_tag_digest_or_public_image(self):
+        tag_spec = SPEC.replace(IMAGE, "ghcr.io/dhbw-appstore-t3/apps/demo-ide:dev")
+        fake = FakeGitHub({"appstore.yaml": tag_spec}, tags=[], ghcr=403)
+        self.assertEqual(self.run_check(entry(status="development"), fake), [])
+        # the same repo as a released app fails on all of it
+        self.assertEqual(len(self.run_check(entry(), fake)), 3)  # no tag, tag-pinned image, image not pullable
+
+    def test_development_entry_still_needs_a_valid_spec_and_a_public_repo(self):
+        broken = SPEC.replace("runtime: kubernetes", "runtime: openstack-vm")
+        errs = self.run_check(entry(status="development"), FakeGitHub({"appstore.yaml": broken}, tags=[]))
+        self.assertTrue(errs and all(e.startswith("default branch 'main': ") for e in errs), errs)
+        errs = self.run_check(entry(status="development"),
+                              FakeGitHub({"appstore.yaml": SPEC}, tags=[], repo={"private": True, "visibility": "private"}))
+        self.assertEqual(errs, ["repo must be PUBLIC (AppStore backend requirement)"])
+
     def test_image_must_be_pullable_anonymously(self):
         self.assertIn("set the package to Public", self.run_check(entry(), FakeGitHub({"appstore.yaml": SPEC}, ghcr=403))[0])
         self.assertIn("digest not found", self.run_check(entry(), FakeGitHub({"appstore.yaml": SPEC}, ghcr=404))[0])

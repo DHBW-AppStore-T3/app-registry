@@ -4,6 +4,8 @@
     check_entry.py apps/foo.yaml [apps/bar.yaml ...] [--offline]
 
 Always checked: schema, file name == name, repo not used by another entry.
+Entries with status: development (an app that is not released yet) are checked on the default branch only,
+may use image tags instead of digests and need no public image or version tag; the rest is checked as below.
 Unless --offline:
   * the repo exists, is public and not archived,
   * the repo has a version tag; the checks below run on the default branch AND on the newest
@@ -123,13 +125,13 @@ def latest_tag(owner_repo: str) -> str | None:
     return max(found)[1] if found else None
 
 
-def check_spec(entry: dict, text: str) -> list[str]:
-    """Problems of the repo's appstore.yaml (strict: the version submitted to the AppStore needs digests)."""
+def check_spec(entry: dict, text: str, allow_tags: bool = False) -> list[str]:
+    """Problems of the repo's appstore.yaml (strict by default: the version submitted to the AppStore needs digests)."""
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         return [f"{SPEC_FILE}: invalid YAML: {exc}"]
-    result = validate(data, allow_tags=False)
+    result = validate(data, allow_tags=allow_tags)
     errs = [f"{SPEC_FILE}: {loc}: {msg}" for loc, msg in result.items]
     if errs or not isinstance(data, dict):
         return errs
@@ -180,8 +182,9 @@ def check(path: Path, offline: bool) -> list[str]:
     if repo.get("archived"):
         errs.append("repo is archived")
     branch = repo["default_branch"]
-    tag = latest_tag(owner_repo)
-    if tag is None:
+    released = entry.get("status", "released") == "released"
+    tag = latest_tag(owner_repo) if released else None
+    if tag is None and released:
         errs.append("no version tag (vX.Y.Z): the AppStore registers versions from git tags")
     # The backend reads appstore.yaml at the commit of the submitted tag, so the newest tag counts as much
     # as the default branch (which is what the next release will be cut from).
@@ -206,7 +209,7 @@ def check(path: Path, offline: bool) -> list[str]:
                     errs.append(f"cannot read {SPEC_FILE} on {label}: {http_problem(code, text)}")
                 elif text not in specs:
                     specs[text] = label
-                    errs += [f"{label}: {e}" for e in check_spec(entry, text)]
+                    errs += [f"{label}: {e}" for e in check_spec(entry, text, allow_tags=not released)]
         else:
             if has_spec:
                 errs.append(f"{SPEC_FILE} exists on {label}: the backend would run this app as pods, not as a VM")
@@ -220,7 +223,7 @@ def check(path: Path, offline: bool) -> list[str]:
                 images.setdefault(c["image"], label)
         except (yaml.YAMLError, KeyError, TypeError):
             pass  # already reported by check_spec
-    for image, label in sorted(images.items()):
+    for image, label in sorted(images.items()) if released else []:
         if (problem := image_pullable(image)) is not None:
             errs.append(f"{label}: image {image}: {problem}")
     return errs

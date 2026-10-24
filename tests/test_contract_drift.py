@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 sys.path.insert(0, str(HERE))
 
 import validate_appstore_yaml as v  # noqa: E402
-from _mutate import mutants  # noqa: E402
+from _mutate import BOUNDS_KEYS, mutants, with_bounds  # noqa: E402
 
 SPEC_PY = os.environ.get("BACKEND_SPEC_PY")
 ITERATIONS = int(os.environ.get("DRIFT_ITERATIONS", "20000"))
@@ -44,8 +44,12 @@ class ContractDrift(unittest.TestCase):
         cls.backend = load_backend(SPEC_PY)
 
     def backend_accepts(self, doc) -> bool:
+        # The ceilings are platform configuration (deployment chart), not part of the parser: both sides get the
+        # validator's, so this compares the rules. check_platform_limits.py compares the ceilings with the chart.
+        limits = self.backend.PlatformLimits(
+            max_cpu_millicores=v.MAX_CPU_M, max_memory_mib=v.MAX_MEM_MI, max_storage_mib=v.MAX_STORAGE_MI)
         try:
-            self.backend.parse_spec(copy.deepcopy(doc), self.backend.PlatformLimits())
+            self.backend.parse_spec(copy.deepcopy(doc), limits)
             return True
         except self.backend.SpecValidationError:
             return False
@@ -53,8 +57,13 @@ class ContractDrift(unittest.TestCase):
     def test_same_verdict_as_the_backend(self):
         seed = yaml.safe_load((HERE / "fixtures" / "valid.appstore.yaml").read_text(encoding="utf-8"))
         self.assertTrue(self.backend_accepts(seed), "the valid fixture is rejected by the backend")
+        seeds, extra_keys = [seed], []
+        # resourceBounds is only in the backend once feat/resource-overrides is merged into dev
+        if hasattr(self.backend, "ResourceBounds"):
+            self.assertTrue(self.backend_accepts(with_bounds(seed)), "valid resourceBounds are rejected by the backend")
+            seeds, extra_keys = [seed, with_bounds(seed)], BOUNDS_KEYS
         problems = []
-        for doc in [seed, *mutants([seed], ITERATIONS)]:
+        for doc in [*seeds, *mutants(seeds, ITERATIONS, extra_keys=extra_keys)]:
             mine = not v.validate(copy.deepcopy(doc), False).items
             theirs = self.backend_accepts(doc)
             if mine != theirs:

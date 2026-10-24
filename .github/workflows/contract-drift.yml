@@ -2,13 +2,14 @@ name: contract-drift
 
 # Der Validator spiegelt app/k8s/spec.py des Backends (Branch dev). Dieser Check laesst beide dieselben
 # zufaellig verfaelschten appstore.yaml bewerten und schlaegt fehl, sobald sie sich widersprechen,
-# z.B. wenn das Backend ein Feld ergaenzt (siehe backend feat/resource-overrides: resourceBounds).
+# z.B. wenn das Backend ein Feld ergaenzt. Zusaetzlich werden die Obergrenzen (CPU/RAM/Speicher) mit dem
+# deployten Helm-Chart verglichen; ein Unterschied ist eine Warnung (siehe scripts/check_platform_limits.py).
 on:
   schedule:
     - cron: "43 5 * * 1"
   workflow_dispatch:
   pull_request:
-    paths: ["scripts/validate_appstore_yaml.py", "tests/**", ".github/workflows/contract-drift.yml"]
+    paths: ["scripts/validate_appstore_yaml.py", "scripts/check_platform_limits.py", "tests/**", ".github/workflows/contract-drift.yml"]
 
 permissions:
   contents: read
@@ -29,3 +30,5 @@ jobs:
         env:
           BACKEND_SPEC_PY: ${{ runner.temp }}/spec.py
         run: python -m unittest discover -s tests -p "test_contract_drift.py" -v
+      - name: Obergrenzen wie im deployten Chart?
+        run: python scripts/check_platform_limits.py

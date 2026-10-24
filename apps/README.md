@@ -9,9 +9,12 @@ Eine Datei pro App: `apps/<name>.yaml`. Der Dateiname ist der App-Name.
 | `owner` | ja | GitHub-User oder `org/team`, das die App verantwortet |
 | `runtime` | ja | `pods` (Kubernetes, `appstore.yaml`) oder `vm` (OpenStack, `terraform/` + `packer/`) |
 | `description` | ja | 10-300 Zeichen |
+| `status` | nein | `released` (Standard) oder `development`: App noch nicht eingereicht, siehe unten |
 
 Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Neue App eintragen: PR mit einer neuen Datei; der Check `validate-registry` prueft Schema, Erreichbarkeit/Sichtbarkeit des Repos, die Vertragsdateien auf dem Default-Branch (bei `pods` auch den Inhalt von `appstore.yaml` und ob die Images oeffentlich ziehbar sind) und dass kein Repo doppelt eingetragen ist.
 
+`status: development` lockert die Pruefung fuer Apps in Entwicklung (nur Default-Branch, Image-Tags statt Digests erlaubt, kein Versions-Tag und kein oeffentliches Image noetig); Repo, `appstore.yaml`-Vertrag, Name und Runtime werden weiter geprueft. Nach dem Einreichen entfernen.
+
 Lokal pruefen: `python scripts/check_entry.py apps/<name>.yaml`.
 
-Hinweis: `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); `ubuntu-app` und `windows-desktop-app` sind weiterhin VM-Apps.
+Hinweis: `windows-matlab-app` ist ein Pods-Eintrag in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); `ubuntu-app` und `windows-desktop-app` sind weiterhin VM-Apps.
