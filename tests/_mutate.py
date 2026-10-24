@@ -18,6 +18,15 @@ VALUES: list[Any] = [
     "file", "enum", "string", "url", "password", "appstore/v2",
 ]
 KEYS = ["x", "name", "from", "value", "expose", "mountPath", "type", "path", "size"]
+BOUNDS_KEYS = ["resourceBounds", "cpu", "memory", "min", "max"]
+
+
+def with_bounds(doc: Any, cpu: tuple[str, str] = ("250m", "2"), memory: tuple[str, str] = ("512Mi", "2Gi")) -> Any:
+    """``doc`` with a valid ``resourceBounds`` on its first container (defaults: 500m / 1Gi lie inside)."""
+    doc = copy.deepcopy(doc)
+    doc["workload"]["containers"][0]["resourceBounds"] = {
+        "cpu": {"min": cpu[0], "max": cpu[1]}, "memory": {"min": memory[0], "max": memory[1]}}
+    return doc
 
 
 def _paths(obj: Any, prefix: tuple = ()) -> Iterator[tuple]:
@@ -36,7 +45,7 @@ def _get(obj: Any, path: tuple) -> Any:
     return obj
 
 
-def mutate_once(doc: Any, rnd: random.Random) -> Any:
+def mutate_once(doc: Any, rnd: random.Random, keys: list[str] = KEYS) -> Any:
     doc = copy.deepcopy(doc)
     path = rnd.choice([p for p in _paths(doc) if p])
     parent, key = _get(doc, path[:-1]), path[-1]
@@ -46,16 +55,17 @@ def mutate_once(doc: Any, rnd: random.Random) -> Any:
     elif op == "set":
         parent[key] = rnd.choice(VALUES)
     elif op == "addkey" and isinstance(parent, dict):
-        parent[rnd.choice(KEYS)] = rnd.choice(VALUES)
+        parent[rnd.choice(keys)] = rnd.choice(VALUES)
     elif op == "dup" and isinstance(parent, list):
         parent.append(copy.deepcopy(parent[key]))
     return doc
 
 
-def mutants(seeds: list[Any], count: int, seed: int = 1) -> Iterator[Any]:
+def mutants(seeds: list[Any], count: int, seed: int = 1, extra_keys: list[str] = ()) -> Iterator[Any]:
     rnd = random.Random(seed)
+    keys = [*KEYS, *extra_keys]
     for _ in range(count):
         doc = rnd.choice(seeds)
         for _ in range(rnd.choice([1, 1, 2, 3])):
-            doc = mutate_once(doc, rnd)
+            doc = mutate_once(doc, rnd, keys)
         yield doc

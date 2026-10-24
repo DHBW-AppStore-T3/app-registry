@@ -30,6 +30,11 @@
       "type": "string",
       "minLength": 10,
       "maxLength": 300
+    },
+    "status": {
+      "enum": ["released", "development"],
+      "default": "released",
+      "description": "released (Standard): als Version im AppStore eingereicht, volle Pruefung. development: noch in Arbeit, ohne Versions-Tag, Digest-Pflicht und oeffentliches Image."
     }
   }
 }

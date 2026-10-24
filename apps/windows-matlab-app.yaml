@@ -2,4 +2,5 @@ name: windows-matlab-app
 repo: https://github.com/DHBW-AppStore-T3/Windows-Matlab-App
 owner: DHBW-AppStore-T3
 runtime: pods
+status: development   # noch nicht eingereicht: kein Versions-Tag, Image per Tag statt Digest
 description: "Windows-Desktop (Wine) im Browser mit MATLAB, ein Pod pro Person. vCPU und RAM waehlbar."

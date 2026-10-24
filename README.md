@@ -9,7 +9,7 @@ Dieses Repo enthaelt
 - `.github/workflows/contract-drift.yml` - vergleicht den Validator mit dem Vertragsparser des Backends,
 - `templates/app-ci-caller.yml` - die Datei, die ein App-Repo kopiert,
 - `scripts/validate_appstore_yaml.py` - Validator fuer den App-Vertrag v2 (`appstore.yaml`), nur PyYAML,
-- `scripts/check_entry.py`, `scripts/check_action_refs.py` - Pruefung der Registry-Eintraege bzw. der `uses:`-Versionen in den Workflows,
+- `scripts/check_entry.py`, `scripts/check_action_refs.py`, `scripts/check_platform_limits.py` - Pruefung der Registry-Eintraege, der `uses:`-Versionen in den Workflows bzw. der Obergrenzen gegen das deployte Chart,
 - `schema/app-entry.schema.json` - JSON-Schema der Registry-Eintraege,
 - `tests/` - Selbsttests und Fixtures.
 
@@ -23,6 +23,7 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 | jupyter-notebook | pods | `v2.0.0` | JupyterLab pro Person, Egress `internet` |
 | web-latex | pods | `v2.0.0` | Editor pro Person, Startpfad `/login`, optionale Starter-ZIP |
 | online-ide | pods | `v2.0.0` | code-server pro Person |
+| windows-matlab-app | pods | - | in Entwicklung (`status: development`): Wine-Desktop mit MATLAB, vCPU/RAM per `resourceBounds` waehlbar; noch kein Versions-Tag, Image per Tag statt Digest |
 | template-app | pods | `v2.0.0` | Vorlage (nginx); `terraform/` + `packer/` liegen noch im Repo, zaehlen aber nicht (`appstore.yaml` macht die Version zum Pods-Release) |
 | ubuntu-app | vm | `v1.0.0` | nur VM, kein Pods-Pendant |
 | windows-desktop-app | vm | `v0.3.4` | nur VM |
@@ -39,7 +40,8 @@ Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide und pgadmin sind
 Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `app/k8s/spec.py` im Backend):
 - Unbekannte Felder werden abgelehnt; Security-Kontext, NetworkPolicy, RBAC kann die App nicht setzen.
 - `image` muss mit **Digest** gepinnt sein, Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/` erlaubt. Konvention fuer App-Images: `ghcr.io/dhbw-appstore-t3/apps/<app>@sha256:<64 hex>` (die Plattform-Images `backend`, `worker`, `frontend` liegen eine Ebene darueber).
-- Genau ein Container hat `expose` (Port 1024-65535). Max. 3 Container, je max. 2 CPU / 4096 Mi, Storage max. 20 Gi.
+- Genau ein Container hat `expose` (Port 1024-65535). Max. 3 Container, Storage max. 20 Gi, je Container max. 4 CPU / 8192 Mi (Obergrenzen der Plattform, `podApps.maxCpu/maxMemory` im Helm-Chart; Stand dieses Repos: siehe Hinweis unten).
+- Optional `resourceBounds` je Container (`cpu` und `memory` mit `min`/`max`): der Bereich, aus dem Nutzer beim Deployen waehlen; `resources` sind der Standardwert und muessen darin liegen, `max` darf die Obergrenzen nicht uebersteigen.
 - `egress: none` (Default) oder `internet`.
 
 Beispiel: [`tests/fixtures/valid.appstore.yaml`](tests/fixtures/valid.appstore.yaml). Lokal pruefen:
@@ -128,6 +130,8 @@ Der Check `validate-registry` prueft
 - `pods`: `appstore.yaml` liegt auf dem Default-Branch, erfuellt den Vertrag **streng** (Digest-Pflicht), heisst wie der Eintrag, hat `runtime: kubernetes`, und jedes Image ist ohne Zugangsdaten von ghcr.io ziehbar (Paket auf *Public*),
 - `vm`: `terraform/` + `packer/` liegen dort und `appstore.yaml` **nicht** (das Backend behandelt eine Version mit `appstore.yaml` als Pods).
 
+Eintraege mit `status: development` (App noch nicht eingereicht) werden nur auf dem Default-Branch geprueft, duerfen Image-Tags statt Digests nutzen und brauchen weder Versions-Tag noch oeffentliches Image; alles andere gilt weiter. Sobald die App eingereicht ist, `status` entfernen.
+
 Alle diese Pruefungen gelten fuer den Default-Branch **und** das neueste Versions-Tag (`vX.Y.Z`), denn das Backend liest `appstore.yaml` an dem Commit, auf den das eingereichte Tag zeigt; ohne Versions-Tag schlaegt der Check fehl. Er laeuft auch woechentlich ueber alle Eintraege.
 
 ## Wie Versionen wirklich in den AppStore kommen (recherchiert im Backend, Branch `dev`)
@@ -153,6 +157,8 @@ python scripts/check_entry.py apps/*.yaml            # braucht Internet; --offli
 python scripts/check_action_refs.py                  # loest alle uses:-Versionen der Workflows auf (Internet)
 ```
 
-`main` ist per PR geschuetzt; Reviews sind nicht zwingend und die Checks sind keine Pflicht-Checks (Branch-Schutz, Einstellung in GitHub). Der Validator spiegelt `app/k8s/spec.py` (Backend `dev`); aendert sich der Vertrag dort, muss `scripts/validate_appstore_yaml.py` nachgezogen werden. Der Workflow `contract-drift` merkt das (woechentlich und bei Aenderungen am Validator): er laesst Validator und Backend-Parser dieselben verfaelschten Dateien bewerten und schlaegt bei abweichendem Urteil fehl. Bekannte Aenderung in Arbeit: Backend-Branch `feat/resource-overrides` fuehrt `resourceBounds` ein; nach dem Merge in `dev` schlaegt der Check fehl, bis der Validator das Feld kennt.
+`main` ist per PR geschuetzt; Reviews sind nicht zwingend und die Checks sind keine Pflicht-Checks (Branch-Schutz, Einstellung in GitHub). Der Validator spiegelt `app/k8s/spec.py` (Backend `dev`); aendert sich der Vertrag dort, muss `scripts/validate_appstore_yaml.py` nachgezogen werden. Der Workflow `contract-drift` merkt das (woechentlich und bei Aenderungen am Validator): er laesst Validator und Backend-Parser dieselben verfaelschten Dateien bewerten und schlaegt bei abweichendem Urteil fehl. `resourceBounds` kennt der Validator schon; im Backend steht es auf `feat/resource-overrides` und ist noch nicht in `dev` (der Drift-Test prueft es automatisch, sobald das Backend es hat).
+
+**Obergrenzen:** CPU/RAM/Speicher sind Konfiguration der Plattform (Helm-Chart `podApps.maxCpu/maxMemory/maxStorage`), nicht Teil des Parsers. Der Validator nutzt 4 CPU / 8 GiB (deployment#119, noch offen); das deployte Chart hat 2 CPU / 4 GiB. Solange das so ist, akzeptiert die CI Specs, die der AppStore ablehnt (`check_platform_limits.py` meldet das im Workflow `contract-drift` als Warnung). Nach dem Merge von deployment#119 verschwindet die Warnung.
 
 Lokaler Drift-Test: `spec.py` aus dem Backend holen (`pip install pydantic`), dann `BACKEND_SPEC_PY=<pfad>/spec.py python -m unittest discover -s tests -p test_contract_drift.py`.
