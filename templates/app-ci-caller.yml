@@ -18,11 +18,10 @@ on:
 permissions: { contents: read, packages: write }
 jobs:
   app:
-    # @v1 ist ein Release-Tag dieses Repos (wandert nur mit kompatiblen Updates mit). `registry-ref` muss dasselbe Tag
-    # sein, sonst kommt der Validator aus einem anderen Stand als die Pipeline.
+    # @v1 ist ein Release-Tag dieses Repos (wandert nur mit kompatiblen Updates mit). Der Validator kommt automatisch
+    # aus demselben Stand wie die Pipeline (ab v1.1.0), ein zweiter Ref ist nicht noetig.
     uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@v1
     with:
-      registry-ref: v1
       push: ${{ github.event_name != 'schedule' }}
       # Ein Image: image/Dockerfile. Mehrere (z.B. pgAdmin): je Eintrag suffix, context, dockerfile.
       # smoke_test ist optional: Skript, das das Image im Sicherheitskontext der Plattform startet (siehe

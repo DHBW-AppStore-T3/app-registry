@@ -60,7 +60,6 @@ jobs:
   app:
     uses: DHBW-AppStore-T3/app-registry/.github/workflows/app-ci.yml@v1
     with:
-      registry-ref: v1
       images: '[{"suffix":"","context":"image","dockerfile":"image/Dockerfile","smoke_test":".github/smoke-test.sh"}]'
 ```
 
@@ -74,21 +73,22 @@ Die Pipeline macht:
 
 **Smoke-Test:** `smoke_test` je Image ist der Pfad eines Skripts im App-Repo (Vorlage: [`templates/smoke-test-example.sh`](templates/smoke-test-example.sh)). Die Pipeline fuehrt es mit dem lokal gebauten Image aus, **bevor** gescannt oder gepusht wird, und setzt `IMAGE` und `PLATFORM_RUN_FLAGS` (der Sicherheitskontext der Plattform: UID 1000, read-only Root, keine Capabilities, kein Privilege-Escalation). Das Skript startet das Image damit, wartet auf die App und prueft sie (Login, ein echter Request). Schlaegt es fehl, wird nichts gepusht.
 
-Optionale Inputs (`with:`): `registry-ref` (siehe *Pinnen*),  `app-name` (Default: Repo-Name in Kleinbuchstaben), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
+Optionale Inputs (`with:`): `registry-ref` (nur Sonderfaelle, siehe *Pinnen und Releases*), `app-name` (Default: Repo-Name in Kleinbuchstaben), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
 
 #### Nur den Vertragscheck nutzen
 Wer seinen eigenen Build behaelt, bindet nur [`templates/spec-check-caller.yml`](templates/spec-check-caller.yml) (`validate-spec.yml`) ein: `appstore.yaml` gegen den Vertrag (streng, Digest-Pflicht) und die Pruefung, dass jedes gepinnte Image anonym von ghcr.io gezogen werden kann, ohne zu bauen.
 
-#### Pinnen
-`@main` heisst: jede Aenderung hier gilt beim naechsten Lauf sofort fuer jede App-CI, auch eine kaputte. Die Vorlagen nutzen deshalb das Release-Tag `v1` (`app-ci.yml@v1`). GitHub loest `@v1` bei jedem Lauf auf den Commit auf, auf den das Tag zeigt; Aenderungen an `main` erreichen die Apps erst, wenn `v1` weitergeschoben wird. Weil die Pipeline den Validator selbst aus diesem Repo holt, muss auch er aus diesem Stand kommen: `registry-ref: v1` in `with:` (Pflicht zusammen mit dem Pinnen, sonst laufen Pipeline und Validator in verschiedenen Staenden).
+#### Pinnen und Releases
+`@main` heisst: jede Aenderung hier gilt beim naechsten Lauf sofort fuer jede App-CI, auch eine kaputte. Die Vorlagen nutzen deshalb das Release-Tag `v1` (`app-ci.yml@v1`). GitHub loest `@v1` bei jedem Lauf auf den Commit auf, auf den das Tag zeigt; Aenderungen an `main` erreichen die Apps erst mit einem Release. Der Validator kommt dabei automatisch aus demselben Stand wie die Pipeline (die Pipeline holt ihre Skripte per `job.workflow_sha` aus dem Commit, aus dem sie selbst geladen wurde; ab `v1.1.0`, davor Standard `main`). Der Input `registry-ref` ist nur noch fuer Sonderfaelle da.
 
-Releases schneidet jemand mit Schreibrecht nach dem Merge: kompatible Aenderungen (Bugfixes, neue optionale Inputs) bekommen ein neues `v1.x.y` und `v1` wird darauf verschoben, inkompatible ein neues Major (`v2`), das Apps bewusst uebernehmen:
+**Release-Prozess** (nur Admins):
+1. Aenderungen an Pipeline oder Validator per PR nach `main`; die Pflicht-Checks muessen gruen sein.
+2. Bei Aenderungen an `app-ci.yml`/`validate-spec.yml` vorher in einer App ausprobieren (Probe-Branch in `template-app`, der mit `@<branch>` auf den Branch zeigt; nie mergen).
+3. GitHub *Releases > Draft a new release*: neues Tag `vX.Y.Z` auf `main`, **Publish**. Der Workflow `release.yml` fuehrt die Tests aus und setzt das Major-Tag `vX` auf denselben Commit. Kompatible Aenderungen (Bugfixes, neue optionale Inputs) bekommen ein neues Minor/Patch, inkompatible ein neues Major (`v2`), das Apps bewusst per Edit von `uses:` uebernehmen.
 
-```bash
-git tag -a v1.1.0 -m "..." <commit> && git tag -fa v1 -m "..." <commit> && git push origin v1.1.0 && git push -f origin v1
-```
+Die Tags `v*` sind per Ruleset geschuetzt: nur Admins und `release.yml` duerfen sie anlegen, verschieben oder loeschen (Settings > Rules > Rulesets > *protect-release-tags*). Wer es ganz unveraenderlich will, pinnt eine App auf einen Commit-SHA (`app-ci.yml@<sha>`); dann braucht jede Pipeline-Aenderung einen PR in jeder App.
 
-`v1.0.0` ist der erste Stand mit Smoke-Test-Hook, `registry-ref` und `validate-spec.yml`. Wer es ganz unveraenderlich will, pinnt auf einen Commit-SHA (`app-ci.yml@<sha>` und `registry-ref: <sha>`).
+**Actions in diesem Repo** sind auf Commits gepinnt (`uses: actions/checkout@<sha> # v7`), weil ein Tag im fremden Repo verschoben werden kann. Dependabot (`.github/dependabot.yml`) schlaegt woechentlich neue Staende vor und passt den Versionskommentar mit an. In *Settings > Actions > General* ist *Require actions to be pinned to a full-length commit SHA* eingeschaltet: ein Workflow mit ungepinnter Action laeuft nicht. Wiederverwendbare Workflows (`uses: owner/repo/.github/workflows/x.yml@v1`) sind davon ausgenommen. Ein neues `uses:` also mit Commit-SHA und Kommentar eintragen (`gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`).
 
 ### 4. Digest in `appstore.yaml` eintragen (Henne-Ei-Problem)
 Der Vertrag verlangt `@sha256:`-Digests, der Digest existiert aber erst nach dem Build. Ablauf:

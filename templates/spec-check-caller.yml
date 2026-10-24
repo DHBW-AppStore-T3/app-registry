@@ -14,6 +14,5 @@ permissions: { contents: read }
 jobs:
   spec:
     uses: DHBW-AppStore-T3/app-registry/.github/workflows/validate-spec.yml@v1
-    with:
-      registry-ref: v1
-      # strict-image-pin: false   # nur vor dem ersten Build, solange es noch keinen Digest gibt
+    # with:
+    #   strict-image-pin: false   # nur vor dem ersten Build, solange es noch keinen Digest gibt
