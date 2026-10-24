@@ -22,5 +22,7 @@ done
 docker logs smoke
 [ "$ok" = 1 ]
 
-# Hier die eigentliche Pruefung: Login, ein Request, der etwas Echtes tut, ...
-curl -fsS "http://[::1]:8080/" | grep -qi "<html"
+# Hier die eigentliche Pruefung: Login, ein Request, der etwas Echtes tut, ... Erst den Body holen, dann pruefen:
+# mit pipefail kann `curl | grep -q` per SIGPIPE (Exit 141) scheitern, sobald grep fruehzeitig fertig ist.
+body=$(curl -fsS "http://[::1]:8080/")
+grep -q "Text, den nur deine App liefert" <<<"$body"
