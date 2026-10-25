@@ -277,9 +277,11 @@ def check_variable(e: Errors, loc: str, v: object) -> None:
     if "default" in v and v["default"] is not None:
         need_str(e, f"{loc}.default", v["default"])
     if v.get("type") == "file":
-        # Without a list the backend accepts every type except programs and archives it cannot inspect.
-        if not exts:
-            e.add(f"{loc}.ext", "file variables need a non-empty ext list (e.g. [zip])")
+        # ext absent (not set at all) means the backend accepts any type except programs and uninspectable
+        # archives.  Require an explicit list so future apps don't accidentally accept more than intended.
+        # ext: [] is allowed for backwards-compatibility (same as absent).
+        if "ext" not in v:
+            e.add(f"{loc}.ext", "file variables need an explicit ext list (e.g. [zip]); an empty list is allowed but a missing key is not")
         mp = v.get("mountPath")
         if not mp:
             e.add(f"{loc}.mountPath", "file variables need an absolute mountPath")

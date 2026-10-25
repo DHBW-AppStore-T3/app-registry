@@ -114,8 +114,8 @@ class Contract(unittest.TestCase):
     def test_file_variable_needs_an_ext_list(self):
         del self.doc["variables"][0]["ext"]
         self.assertEqual(locs(self.doc), {"variables[0].ext"})
-        self.doc["variables"][0]["ext"] = []
-        self.assertEqual(locs(self.doc), {"variables[0].ext"})
+        self.doc["variables"][0]["ext"] = []  # explicit empty list: allowed (same as absent for the backend)
+        self.assertEqual(locs(self.doc), set())
 
     def test_access_template_must_be_https_with_known_placeholders(self):
         self.doc["access"][0]["template"] = "http://{workload}"
