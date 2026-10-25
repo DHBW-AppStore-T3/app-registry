@@ -194,3 +194,53 @@ class Robustness(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KubevirtVm(unittest.TestCase):
+    """``vm`` of a kubevirt-vm app: the same limits as VmSpec in the backend."""
+
+    BASE = {
+        "apiVersion": "appstore/v2", "name": "windows", "runtime": "kubevirt-vm", "scope": "user",
+        "vm": {"cpuCores": 4, "memoryGiB": 8, "diskGiB": 90, "imageRef": "windows11-matlab-golden"},
+        "userChoices": {"internet": True, "podNetwork": True},
+    }
+    BOUNDS = {"cpuCores": {"min": 2, "max": 8}, "memoryGiB": {"min": 4, "max": 16}}
+
+    def doc(self, **vm):
+        out = copy.deepcopy(self.BASE)
+        out["vm"].update(vm)
+        return out
+
+    def test_a_vm_app_with_and_without_bounds_is_valid(self):
+        self.assertEqual(locs(self.doc()), set())
+        self.assertEqual(locs(self.doc(bounds=self.BOUNDS, imageNamespace="vm-images", vncAccess=True)), set())
+
+    def test_sizes_outside_the_vm_limits_are_refused(self):
+        self.assertEqual(locs(self.doc(cpuCores=17)), {"vm.cpuCores"})
+        self.assertEqual(locs(self.doc(memoryGiB=1)), {"vm.memoryGiB"})
+        self.assertEqual(locs(self.doc(diskGiB=20)), {"vm.diskGiB"})
+        self.assertEqual(locs(self.doc(cpuCores="many")), {"vm.cpuCores"})
+
+    def test_unknown_and_missing_fields_are_refused(self):
+        self.assertEqual(locs(self.doc(gpu=True)), {"vm.gpu"})
+        doc = self.doc()
+        del doc["vm"]["imageRef"]
+        self.assertEqual(locs(doc), {"vm.imageRef"})
+
+    def test_only_the_image_is_required_the_sizes_have_defaults(self):
+        doc = self.doc()
+        for field in ("cpuCores", "memoryGiB", "diskGiB"):
+            del doc["vm"][field]
+        self.assertEqual(locs(doc), set())
+
+    def test_the_image_must_be_a_plain_name(self):
+        self.assertEqual(locs(self.doc(imageRef="Golden Image")), {"vm.imageRef"})
+        self.assertEqual(locs(self.doc(imageNamespace="../kube-system")), {"vm.imageNamespace"})
+
+    def test_bounds_must_be_ordered_within_the_limits_and_contain_the_default(self):
+        bad_order = {"cpuCores": {"min": 8, "max": 2}, "memoryGiB": self.BOUNDS["memoryGiB"]}
+        self.assertEqual(locs(self.doc(bounds=bad_order)), {"vm.bounds.cpuCores"})
+        too_big = {"cpuCores": {"min": 2, "max": 32}, "memoryGiB": self.BOUNDS["memoryGiB"]}
+        self.assertEqual(locs(self.doc(bounds=too_big)), {"vm.bounds.cpuCores.max"})
+        self.assertEqual(locs(self.doc(cpuCores=1, bounds=self.BOUNDS)), {"vm.cpuCores"})
+        self.assertEqual(locs(self.doc(bounds={"cpuCores": self.BOUNDS["cpuCores"]})), {"vm.bounds.memoryGiB"})

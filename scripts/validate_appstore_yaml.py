@@ -296,6 +296,67 @@ def check_access(e: Errors, loc: str, a: object) -> None:
         need_str(e, f"{loc}.username", a["username"])
 
 
+VM_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,62}$")
+# The VM limits of the contract (VmSpec in the backend's app/k8s/spec.py).
+VM_CORES = (1, 16)
+VM_MEMORY_GIB = (2, 32)
+VM_DISK_GIB = (40, 200)
+
+
+_LAX_BOOLS = {"0", "1", "t", "f", "y", "n", "true", "false", "yes", "no", "on", "off"}
+
+
+def _lax_bool(v: object) -> bool:
+    """A bool the way pydantic's lax mode reads it (VmSpec.vnc_access is not StrictBool)."""
+    return isinstance(v, bool) or (isinstance(v, int) and v in (0, 1)) or (isinstance(v, str) and v.lower() in _LAX_BOOLS)
+
+
+def _vm_number(e: Errors, loc: str, v: object, lo: int, hi: int) -> int | None:
+    # pydantic's int fields (VmSpec) read True as 1, unlike as_int.
+    n = int(v) if isinstance(v, bool) else as_int(v)
+    if n is None:
+        e.add(loc, "must be a whole number")
+    elif not lo <= n <= hi:
+        e.add(loc, f"must be between {lo} and {hi}")
+        return None
+    return n
+
+
+def check_vm(e: Errors, vm: object) -> None:
+    """``vm`` of a kubevirt-vm app: sizes within the VM limits, the image to clone, optional bounds."""
+    if not only_keys(e, "vm", vm, {"cpuCores", "memoryGiB", "diskGiB", "imageRef", "imageNamespace", "storageClass",
+                                  "vncAccess", "bounds"}, {"imageRef"}):
+        return
+    assert isinstance(vm, dict)
+    # Defaults as in VmSpec: 4 vCPUs, 8 GiB, 80 GiB.
+    cores = _vm_number(e, "vm.cpuCores", vm["cpuCores"], *VM_CORES) if "cpuCores" in vm else 4
+    memory = _vm_number(e, "vm.memoryGiB", vm["memoryGiB"], *VM_MEMORY_GIB) if "memoryGiB" in vm else 8
+    if "diskGiB" in vm:
+        _vm_number(e, "vm.diskGiB", vm["diskGiB"], *VM_DISK_GIB)
+    for field in ("imageRef", "imageNamespace"):
+        if field in vm and need_str(e, f"vm.{field}", vm[field]) and not VM_NAME_RE.match(vm[field]):
+            e.add(f"vm.{field}", f"invalid {field} {vm[field]!r} (lowercase letters, digits, '-')")
+    if "storageClass" in vm:
+        need_str(e, "vm.storageClass", vm["storageClass"])
+    if "vncAccess" in vm and not _lax_bool(vm["vncAccess"]):
+        e.add("vm.vncAccess", "must be true or false")
+    bounds = vm.get("bounds")
+    if bounds is None or not only_keys(e, "vm.bounds", bounds, {"cpuCores", "memoryGiB"}, {"cpuCores", "memoryGiB"}):
+        return
+    for field, limits, default in (("cpuCores", VM_CORES, cores), ("memoryGiB", VM_MEMORY_GIB, memory)):
+        loc = f"vm.bounds.{field}"
+        if field not in bounds or not only_keys(e, loc, bounds[field], {"min", "max"}, {"min", "max"}):
+            continue
+        rng = bounds[field]
+        lo = _vm_number(e, f"{loc}.min", rng.get("min"), *limits) if "min" in rng else None
+        hi = _vm_number(e, f"{loc}.max", rng.get("max"), *limits) if "max" in rng else None
+        if lo is not None and hi is not None:
+            if lo > hi:
+                e.add(loc, "min must not exceed max")
+            elif default is not None and not lo <= default <= hi:
+                e.add(f"vm.{field}", f"the default must lie within bounds.{field}")
+
+
 def validate(data: object, allow_tags: bool = False) -> Errors:
     e = Errors()
     if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "egress", "podNetwork", "userChoices", "variables",
@@ -329,10 +390,8 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
         vm = data.get("vm")
         if vm is None:
             e.add("vm", "runtime 'kubevirt-vm' requires 'vm'")
-        elif isinstance(vm, dict):
-            for field in ("cpuCores", "memoryGiB", "diskGiB", "imageRef"):
-                if field not in vm:
-                    e.add(f"vm.{field}", f"required for kubevirt-vm")
+        else:
+            check_vm(e, vm)
         if wl is not None:
             e.add("workload", "runtime 'kubevirt-vm' does not use 'workload'")
     containers: list = []

@@ -19,6 +19,7 @@ VALUES: list[Any] = [
 ]
 KEYS = ["x", "name", "from", "value", "expose", "mountPath", "type", "path", "size"]
 BOUNDS_KEYS = ["resourceBounds", "cpu", "memory", "min", "max"]
+VM_KEYS = ["vm", "bounds", "cpuCores", "memoryGiB", "diskGiB", "imageRef", "imageNamespace", "storageClass", "vncAccess"]
 
 
 def with_bounds(doc: Any, cpu: tuple[str, str] = ("250m", "2"), memory: tuple[str, str] = ("512Mi", "2Gi")) -> Any:
