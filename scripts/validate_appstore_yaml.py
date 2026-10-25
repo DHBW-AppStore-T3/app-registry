@@ -296,12 +296,8 @@ def check_access(e: Errors, loc: str, a: object) -> None:
 
 def validate(data: object, allow_tags: bool = False) -> Errors:
     e = Errors()
-<<<<<<< Updated upstream
-    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "egress", "podNetwork", "userChoices", "variables",
+    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "egress", "podNetwork", "userChoices", "variables",
                    "access"},
-=======
-    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "egress", "variables", "access"},
->>>>>>> Stashed changes
                      {"apiVersion", "name", "runtime"}):
         return e
     if data.get("apiVersion") != "appstore/v2":
