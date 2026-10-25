@@ -132,11 +132,9 @@ class Contract(unittest.TestCase):
         del self.c["expose"]["path"]
         self.assertEqual(v.validate(self.doc).warnings, [])
 
-    def test_vm_runtime_has_no_workload(self):
+    def test_unknown_runtime_is_rejected(self):
         self.doc["runtime"] = "openstack-vm"
-        self.assertEqual(locs(self.doc), {"workload"})
-        del self.doc["workload"]
-        self.assertEqual(locs(self.doc), set())
+        self.assertIn("runtime", locs(self.doc))
 
     def test_wrong_api_version_and_non_mapping(self):
         self.doc["apiVersion"] = "appstore/v1"

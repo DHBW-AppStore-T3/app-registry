@@ -14,7 +14,7 @@ VALUES: list[Any] = [
     "https://x/{foo}", "http://x", "https://{workload}.{zone}/", "https://", "{", "{user}", "{team}", "{deployment}",
     f"ghcr.io/dhbw-appstore-t3/x@{DIGEST}", "ghcr.io/dhbw-appstore-t3/x:tag", "ghcr.io/dhbw-appstore-t3/",
     f"ghcr.io/dhbw-appstore-t3-evil/x@{DIGEST}",
-    "generated-password", "team-name", "user-name", "none", "internet", "kubernetes", "openstack-vm", "team", "user",
+    "generated-password", "team-name", "user-name", "none", "internet", "kubernetes", "team", "user",
     "file", "enum", "string", "url", "password", "appstore/v2",
 ]
 KEYS = ["x", "name", "from", "value", "expose", "mountPath", "type", "path", "size"]

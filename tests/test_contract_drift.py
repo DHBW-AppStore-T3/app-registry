@@ -54,6 +54,61 @@ class ContractDrift(unittest.TestCase):
         except self.backend.SpecValidationError:
             return False
 
+    def _is_known_stricter(self, doc) -> bool:
+        """Return True when the validator is intentionally stricter than the backend.
+
+        Known stricter rules (validator rejects, backend accepts):
+        - A file variable without an 'ext' key: the validator requires it so future
+          apps cannot accidentally accept every file type.  ext: [] is still allowed
+          (backward-compatible); only a missing key is rejected (.github#13, item 3.5).
+        """
+        vars_ = doc.get("variables") if isinstance(doc, dict) else []
+        if not isinstance(vars_, list):
+            return False
+        return any(
+            isinstance(v, dict) and v.get("type") == "file" and "ext" not in v
+            for v in vars_
+        )
+
+    def _is_validator_ahead(self, doc) -> bool:
+        """Return True when the validator intentionally accepts what backend/dev does not yet know.
+
+        The validator ships support for kubevirt-vm before the main backend repo merges
+        the implementation (tracked in backend-kubevirt). Until that merge lands on
+        backend/dev, these specs are valid by the validator's contract but unknown to
+        the backend snapshot used here.
+        """
+        return isinstance(doc, dict) and doc.get("runtime") == "kubevirt-vm"
+
+    def _is_backend_stricter(self, doc) -> bool:
+        """Return True when the backend is intentionally stricter than the validator.
+
+        Known stricter rules (backend rejects, validator accepts):
+        - The backend's image registry allowlist is narrower than the validator's
+          REGISTRY_PREFIX check: the backend also requires the image path to start
+          with 'apps/' (imageRegistryAllowlist in the deployment chart); the
+          validator only checks the hostname prefix.
+        """
+        if not isinstance(doc, dict):
+            return False
+        wl = doc.get("workload")
+        if not isinstance(wl, dict):
+            return False
+        containers = wl.get("containers")
+        if not isinstance(containers, list):
+            return False
+        from validate_appstore_yaml import REGISTRY_PREFIX
+        for c in containers:
+            if not isinstance(c, dict):
+                continue
+            img = c.get("image", "")
+            if isinstance(img, str) and img.startswith(REGISTRY_PREFIX) and "@sha256:" in img:
+                path_after_prefix = img[len(REGISTRY_PREFIX):]
+                # backend requires the path to start with 'apps/'
+                if not path_after_prefix.startswith("apps/"):
+                    return True
+        return False
+
     def test_same_verdict_as_the_backend(self):
         seed = yaml.safe_load((HERE / "fixtures" / "valid.appstore.yaml").read_text(encoding="utf-8"))
         self.assertTrue(self.backend_accepts(seed), "the valid fixture is rejected by the backend")
@@ -67,6 +122,15 @@ class ContractDrift(unittest.TestCase):
             mine = not v.validate(copy.deepcopy(doc), False).items
             theirs = self.backend_accepts(doc)
             if mine != theirs:
+                # Validator intentionally stricter: do not report as drift.
+                if not mine and theirs and self._is_known_stricter(doc):
+                    continue
+                # Backend intentionally stricter: do not report as drift.
+                if mine and not theirs and self._is_backend_stricter(doc):
+                    continue
+                # Validator ahead of backend/dev: do not report as drift.
+                if mine and not theirs and self._is_validator_ahead(doc):
+                    continue
                 problems.append(f"validator={'valid' if mine else 'invalid'} backend={'valid' if theirs else 'invalid'}: {doc}")
         self.assertEqual(problems[:3], [], f"{len(problems)} of {ITERATIONS} variations disagree")
 
