@@ -296,8 +296,12 @@ def check_access(e: Errors, loc: str, a: object) -> None:
 
 def validate(data: object, allow_tags: bool = False) -> Errors:
     e = Errors()
+<<<<<<< Updated upstream
     if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "egress", "podNetwork", "userChoices", "variables",
                    "access"},
+=======
+    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "egress", "variables", "access"},
+>>>>>>> Stashed changes
                      {"apiVersion", "name", "runtime"}):
         return e
     if data.get("apiVersion") != "appstore/v2":
@@ -305,8 +309,8 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
     if "name" in data and need_str(e, "name", data["name"]) and not NAME_RE.match(data["name"]):
         e.add("name", f"invalid app name {data['name']!r} (lowercase letters, digits, '-')")
     runtime = data.get("runtime")
-    if runtime not in ("kubernetes", "openstack-vm"):
-        e.add("runtime", "must be kubernetes or openstack-vm")
+    if runtime not in ("kubernetes", "kubevirt-vm"):
+        e.add("runtime", "must be kubernetes or kubevirt-vm")
     if data.get("scope", "team") not in ("team", "user"):
         e.add("scope", "must be team or user")
     if data.get("egress", "none") not in ("none", "internet"):
@@ -323,8 +327,16 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
     wl = data.get("workload")
     if runtime == "kubernetes" and wl is None:
         e.add("workload", "runtime 'kubernetes' requires 'workload'")
-    if runtime == "openstack-vm" and wl is not None:
-        e.add("workload", "runtime 'openstack-vm' uses terraform/ + packer/, 'workload' is not allowed")
+    if runtime == "kubevirt-vm":
+        vm = data.get("vm")
+        if vm is None:
+            e.add("vm", "runtime 'kubevirt-vm' requires 'vm'")
+        elif isinstance(vm, dict):
+            for field in ("cpuCores", "memoryGiB", "diskGiB", "imageRef"):
+                if field not in vm:
+                    e.add(f"vm.{field}", f"required for kubevirt-vm")
+        if wl is not None:
+            e.add("workload", "runtime 'kubevirt-vm' does not use 'workload'")
     containers: list = []
     storage = None
     if wl is not None and only_keys(e, "workload", wl, {"containers", "storage"}, {"containers"}):
