@@ -17,4 +17,4 @@ Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Ne
 
 Lokal pruefen: `python scripts/check_entry.py apps/<name>.yaml`.
 
-Hinweis: `windows-matlab-app` ist ein Pods-Eintrag in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); `ubuntu-app` und `windows-desktop-app` sind weiterhin VM-Apps.
+Hinweis: `windows-matlab-app` ist ein Pods-Eintrag in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide`, `ubuntu-app` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); `windows-desktop-app` ist weiterhin eine VM-App.

@@ -15,7 +15,7 @@ Dieses Repo enthaelt
 
 Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der Wahrheit des AppStores: Apps und Versionen werden im AppStore selbst registriert (siehe unten).
 
-## Registrierte Apps (Stand 2026-10-24)
+## Registrierte Apps (Stand 2026-10-25)
 
 | App | Runtime | Version | Hinweis |
 |---|---|---|---|
@@ -25,10 +25,10 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 | online-ide | pods | `v2.0.0` | code-server pro Person |
 | windows-matlab-app | pods | - | in Entwicklung (`status: development`): Wine-Desktop mit MATLAB, vCPU/RAM per `resourceBounds` waehlbar; noch kein Versions-Tag, Image per Tag statt Digest |
 | template-app | pods | `v2.0.0` | Vorlage (nginx); `terraform/` + `packer/` liegen noch im Repo, zaehlen aber nicht (`appstore.yaml` macht die Version zum Pods-Release) |
-| ubuntu-app | vm | `v1.0.0` | nur VM, kein Pods-Pendant |
+| ubuntu-app | pods | `v2.0.0` | Web-Terminal (ttyd) pro Person statt SSH auf einer gemeinsamen VM, ohne sudo; GNU-Userland, Egress `internet` |
 | windows-desktop-app | vm | `v0.3.4` | nur VM |
 
-Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide und pgadmin sind VM-Versionen und bleiben nur ueber ihren Tag erreichbar (template-app hat nur `v2.0.0`).
+Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide, pgadmin und ubuntu-app sind VM-Versionen und bleiben nur ueber ihren Tag erreichbar (template-app hat nur `v2.0.0`).
 
 ## So kommt eine neue App in den AppStore (Schritt fuer Schritt)
 
