@@ -24,6 +24,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_entry import SPEC_FILE, gh, latest_tag  # noqa: E402
+from validate_appstore_yaml import UnsafeYaml, load_yaml  # noqa: E402
 
 DIGEST_IMAGE = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
 
@@ -31,8 +32,8 @@ DIGEST_IMAGE = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
 def images_of(spec_text: str) -> list[str]:
     """The digest-pinned ghcr.io images of an appstore.yaml (anything else is the validator's business)."""
     try:
-        containers = yaml.safe_load(spec_text)["workload"]["containers"]
-    except (yaml.YAMLError, KeyError, TypeError):
+        containers = load_yaml(spec_text.encode("utf-8", "replace"))["workload"]["containers"]
+    except (yaml.YAMLError, UnsafeYaml, KeyError, TypeError):
         return []
     found = (c.get("image") for c in containers if isinstance(c, dict))
     return sorted({i for i in found if isinstance(i, str) and DIGEST_IMAGE.match(i)})

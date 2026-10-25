@@ -27,6 +27,7 @@ egress: none
 variables:
   - name: tasks
     type: file
+    ext: [zip]
     mountPath: /opt/tasks.zip
     maxSize: 1Mi
 access:
