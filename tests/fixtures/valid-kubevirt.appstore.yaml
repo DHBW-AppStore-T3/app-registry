@@ -1,0 +1,17 @@
+apiVersion: appstore/v2
+name: windows-demo
+runtime: kubevirt-vm
+scope: user
+vm:
+  cpuCores: 4
+  memoryGiB: 8
+  diskGiB: 90
+  imageRef: windows11-golden
+  bounds:
+    cpuCores: { min: 2, max: 8 }
+    memoryGiB: { min: 4, max: 16 }
+egress: internet
+userChoices: { internet: true, podNetwork: true }
+access:
+  - { type: url, template: "https://{workload}-{deployment}.{domain}" }
+  - { type: password, from: generated-password, username: "{user}" }
