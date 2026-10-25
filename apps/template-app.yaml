@@ -2,4 +2,4 @@ name: template-app
 repo: https://github.com/DHBW-AppStore-T3/template-app
 owner: DHBW-AppStore-T3
 runtime: pods
-description: "Vorlage fuer neue AppStore-Apps (nginx-Pod mit appstore.yaml; Terraform/Packer-Vorlage fuer VM-Apps liegt weiter im Repo)."
+description: "Vorlage fuer neue AppStore-Apps (nginx-Pod mit appstore.yaml)."

@@ -63,9 +63,9 @@ class CatalogImages(unittest.TestCase):
         fake = FakeGitHub({"v1.2.0": SPEC, "main": SPEC})
         self.assertEqual([r["ref"] for r in self.rows(entry(), fake)], ["v1.2.0"])
 
-    def test_vm_and_development_entries_are_skipped(self):
+    def test_kubevirt_and_development_entries_are_skipped(self):
         fake = FakeGitHub({"v1.2.0": SPEC, "main": SPEC})
-        self.assertEqual(self.rows(entry(runtime="vm"), fake), [])
+        self.assertEqual(self.rows(entry(runtime="kubevirt-vm"), fake), [])
         self.assertEqual(self.rows(entry(status="development"), fake), [])
 
     def test_only_digest_pinned_ghcr_images(self):

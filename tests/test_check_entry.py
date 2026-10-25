@@ -70,9 +70,10 @@ class CheckEntry(unittest.TestCase):
     def test_good_pods_entry(self):
         self.assertEqual(self.run_check(entry(), FakeGitHub({"appstore.yaml": SPEC})), [])
 
-    def test_good_vm_entry(self):
-        fake = FakeGitHub({"terraform": "", "packer": ""})
-        self.assertEqual(self.run_check(entry(runtime="vm"), fake), [])
+    def test_the_vm_runtime_is_gone(self):
+        errs = self.run_check(entry(runtime="vm"), offline=True)
+        self.assertEqual(len(errs), 1)
+        self.assertTrue(errs[0].startswith("schema:"))
 
     def test_offline_only_checks_schema_and_file_name(self):
         self.assertEqual(self.run_check(entry(), offline=True), [])
@@ -101,16 +102,6 @@ class CheckEntry(unittest.TestCase):
     def test_pods_entry_needs_appstore_yaml(self):
         self.assertEqual(self.run_check(entry(), FakeGitHub({})),
                          ["appstore.yaml missing on default branch 'main'", "appstore.yaml missing on tag v2.0.0"])
-
-    def test_vm_entry_must_not_have_appstore_yaml(self):
-        fake = FakeGitHub({"terraform": "", "packer": "", "appstore.yaml": SPEC})
-        errs = self.run_check(entry(runtime="vm"), fake)
-        self.assertEqual(len(errs), 2)  # default branch and newest tag
-        self.assertTrue(all("as pods, not as a VM" in e for e in errs))
-
-    def test_vm_entry_needs_terraform_and_packer(self):
-        errs = self.run_check(entry(runtime="vm"), FakeGitHub({}))
-        self.assertEqual(len(errs), 4)  # terraform/ and packer/, each on the default branch and the newest tag
 
     def test_appstore_yaml_must_be_valid_named_alike_and_kubernetes(self):
         tag = SPEC.replace(IMAGE, "ghcr.io/dhbw-appstore-t3/apps/demo-ide:latest")
@@ -145,12 +136,6 @@ class CheckEntry(unittest.TestCase):
     def test_repo_without_version_tag(self):
         errs = self.run_check(entry(), FakeGitHub({"appstore.yaml": SPEC}, tags=[]))
         self.assertEqual(errs, ["no version tag (vX.Y.Z): the AppStore registers versions from git tags"])
-
-    def test_vm_app_whose_newest_tag_has_a_spec(self):
-        fake = FakeGitHub({"terraform": "", "packer": ""}, at_tag={"appstore.yaml": SPEC})
-        errs = self.run_check(entry(runtime="vm"), fake)
-        self.assertEqual(len(errs), 1)
-        self.assertIn("exists on tag v2.0.0", errs[0])
 
     def test_development_entry_needs_no_tag_digest_or_public_image(self):
         tag_spec = SPEC.replace(IMAGE, "ghcr.io/dhbw-appstore-t3/apps/demo-ide:dev")

@@ -23,8 +23,8 @@
       "description": "GitHub-User oder -Team (org/team), das die App verantwortet."
     },
     "runtime": {
-      "enum": ["pods", "vm", "kubevirt-vm"],
-      "description": "pods = Kubernetes (appstore.yaml, runtime kubernetes); vm = OpenStack-VM (terraform/ + packer/); kubevirt-vm = KubeVirt VM (appstore.yaml, runtime kubevirt-vm)."
+      "enum": ["pods", "kubevirt-vm"],
+      "description": "pods = Kubernetes (appstore.yaml, runtime kubernetes); kubevirt-vm = KubeVirt VM (appstore.yaml, runtime kubevirt-vm). Die OpenStack-VM-Runtime (vm) gibt es nicht mehr."
     },
     "description": {
       "type": "string",

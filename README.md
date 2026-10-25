@@ -24,19 +24,18 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 | web-latex | pods | `v2.0.0` | Editor pro Person, optionale Starter-ZIP. Achtung: `v2.0.0` und `v2.0.1` sind auf dem Cluster nicht benutzbar (der Ingress routet nur `/login`), Fix in Web-LaTeX#6 als `v2.0.2` |
 | online-ide | pods | `v2.0.0` | code-server pro Person |
 | windows-matlab-app | pods | - | in Entwicklung (`status: development`): Wine-Desktop mit MATLAB, vCPU/RAM per `resourceBounds` waehlbar; noch kein Versions-Tag, Image per Tag statt Digest |
-| template-app | pods | `v2.0.0` | Vorlage (nginx); `terraform/` + `packer/` liegen noch im Repo, zaehlen aber nicht (`appstore.yaml` macht die Version zum Pods-Release) |
+| template-app | pods | `v2.0.0` | Vorlage (nginx) |
 | ubuntu-app | pods | `v2.0.0` | Web-Terminal (ttyd) pro Person statt SSH auf einer gemeinsamen VM, ohne sudo; GNU-Userland, Egress `internet` |
-| windows-desktop-app | vm | `v0.3.4` | nur VM |
 
-Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide, pgadmin und ubuntu-app sind VM-Versionen und bleiben nur ueber ihren Tag erreichbar (template-app hat nur `v2.0.0`).
+Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide, pgadmin und ubuntu-app sind VM-Versionen und im AppStore nicht mehr nutzbar (eine Version ohne `appstore.yaml` wird abgelehnt). `windows-desktop-app` (reine OpenStack-VM-App) ist aus der Registry entfernt; Windows laeuft kuenftig ueber KubeVirt (`windows-matlab-app`, `runtime: kubevirt-vm`).
 
 ## So kommt eine neue App in den AppStore (Schritt fuer Schritt)
 
 ### 1. App-Repo anlegen
 - Repo in der Org `DHBW-AppStore-T3` (oder GitHub-Host aus `APP_GIT_ALLOWED_HOSTS`, aktuell `github.com`). **Das Repo muss oeffentlich sein**, sonst lehnt das Backend es ab.
-- Pods-App: `appstore.yaml` im Repo-Root und das Image unter `image/` (`image/Dockerfile`, so machen es alle bestehenden Pods-Apps; mehrere Images je in einem Unterordner, z.B. `image/pgadmin`). VM-App: `terraform/` und `packer/` (siehe [template-app](https://github.com/DHBW-AppStore-T3/template-app)).
+- `appstore.yaml` im Repo-Root und das Image unter `image/` (`image/Dockerfile`, so machen es alle bestehenden Pods-Apps; mehrere Images je in einem Unterordner, z.B. `image/pgadmin`).
 
-### 2. `appstore.yaml` schreiben (nur Pods)
+### 2. `appstore.yaml` schreiben
 Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `app/k8s/spec.py` im Backend):
 - Unbekannte Felder werden abgelehnt; Security-Kontext, NetworkPolicy, RBAC kann die App nicht setzen.
 - `image` muss mit **Digest** gepinnt sein, Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/` erlaubt. Konvention fuer App-Images: `ghcr.io/dhbw-appstore-t3/apps/<app>@sha256:<64 hex>` (die Plattform-Images `backend`, `worker`, `frontend` liegen eine Ebene darueber).
@@ -138,15 +137,14 @@ PR gegen dieses Repo mit `apps/<name>.yaml`:
 name: meine-app            # = Dateiname, ^[a-z][a-z0-9-]{0,30}$
 repo: https://github.com/DHBW-AppStore-T3/meine-app
 owner: DHBW-AppStore-T3    # GitHub-User oder org/team
-runtime: pods              # pods | vm
+runtime: pods              # pods | kubevirt-vm
 description: "Mindestens zehn Zeichen, maximal 300."
 ```
 
 Der Check `validate-registry` prueft
 - Schema, Dateiname, kein Repo doppelt eingetragen,
 - das Repo ist erreichbar, **oeffentlich** und nicht archiviert, und hat ein Versions-Tag,
-- `pods`: `appstore.yaml` liegt auf dem Default-Branch, erfuellt den Vertrag **streng** (Digest-Pflicht), heisst wie der Eintrag, hat `runtime: kubernetes`, und jedes Image ist ohne Zugangsdaten von ghcr.io ziehbar (Paket auf *Public*),
-- `vm`: `terraform/` + `packer/` liegen dort und `appstore.yaml` **nicht** (das Backend behandelt eine Version mit `appstore.yaml` als Pods).
+- `appstore.yaml` liegt auf dem Default-Branch, erfuellt den Vertrag **streng** (Digest-Pflicht), heisst wie der Eintrag, hat `runtime: kubernetes`, und jedes Image ist ohne Zugangsdaten von ghcr.io ziehbar (Paket auf *Public*),
 
 Eintraege mit `status: development` (App noch nicht eingereicht) werden nur auf dem Default-Branch geprueft, duerfen Image-Tags statt Digests nutzen und brauchen weder Versions-Tag noch oeffentliches Image; alles andere gilt weiter. Sobald die App eingereicht ist, `status` entfernen.
 
