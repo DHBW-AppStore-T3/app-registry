@@ -10,11 +10,9 @@ Unless --offline:
   * the repo exists, is public and not archived,
   * the repo has a version tag; the checks below run on the default branch AND on the newest
     vX.Y.Z tag (the backend reads the contract at the commit of the submitted tag),
-  * runtime pods: appstore.yaml is there, passes the app contract (digest-pinned,
+  * appstore.yaml is there, passes the app contract (digest-pinned,
     validate_appstore_yaml.py), its name is the entry name and every image can be pulled
-    anonymously from ghcr.io (a private package would fail on the cluster),
-  * runtime vm: terraform/ and packer/ exist and appstore.yaml does NOT (the backend runs
-    a version as pods as soon as the file is there).
+    anonymously from ghcr.io (a private package would fail on the cluster).
 Uses GITHUB_TOKEN if set (only for the rate limit); public visibility is checked
 explicitly via the repo metadata.
 Dependencies: PyYAML, jsonschema.
@@ -200,22 +198,15 @@ def check(path: Path, offline: bool) -> list[str]:
     specs: dict[str, str] = {}  # spec text -> where it was found first
     for label, ref in refs:
         has_spec = lookup(ref, SPEC_FILE)
-        if entry["runtime"] == "pods":
-            if has_spec is False:
-                errs.append(f"{SPEC_FILE} missing on {label}")
-            elif has_spec:
-                code, text = gh(f"repos/{owner_repo}/contents/{SPEC_FILE}?ref={urllib.parse.quote(ref)}", raw=True)
-                if code != 200:
-                    errs.append(f"cannot read {SPEC_FILE} on {label}: {http_problem(code, text)}")
-                elif text not in specs:
-                    specs[text] = label
-                    errs += [f"{label}: {e}" for e in check_spec(entry, text, allow_tags=not released)]
-        else:
-            if has_spec:
-                errs.append(f"{SPEC_FILE} exists on {label}: the backend would run this app as pods, not as a VM")
-            for d in ("terraform", "packer"):
-                if lookup(ref, d) is False:
-                    errs.append(f"directory {d}/ missing on {label} (runtime vm)")
+        if has_spec is False:
+            errs.append(f"{SPEC_FILE} missing on {label}")
+        elif has_spec:
+            code, text = gh(f"repos/{owner_repo}/contents/{SPEC_FILE}?ref={urllib.parse.quote(ref)}", raw=True)
+            if code != 200:
+                errs.append(f"cannot read {SPEC_FILE} on {label}: {http_problem(code, text)}")
+            elif text not in specs:
+                specs[text] = label
+                errs += [f"{label}: {e}" for e in check_spec(entry, text, allow_tags=not released)]
     images = {}
     for text, label in specs.items():
         try:

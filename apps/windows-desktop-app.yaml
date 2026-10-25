@@ -1,5 +1,0 @@
-name: windows-desktop-app
-repo: https://github.com/DHBW-AppStore-T3/Windows-Desktop-App
-owner: DHBW-AppStore-T3
-runtime: vm
-description: "Windows-11-Desktop pro Person als VM, erreichbar per Remote Desktop (RDP)."

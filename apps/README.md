@@ -7,7 +7,7 @@ Eine Datei pro App: `apps/<name>.yaml`. Der Dateiname ist der App-Name.
 | `name` | ja | `^[a-z][a-z0-9-]{0,30}$`, gleich dem Dateinamen |
 | `repo` | ja | `https://github.com/<org>/<repo>`, muss **oeffentlich** sein |
 | `owner` | ja | GitHub-User oder `org/team`, das die App verantwortet |
-| `runtime` | ja | `pods` (Kubernetes, `appstore.yaml`) oder `vm` (OpenStack, `terraform/` + `packer/`) |
+| `runtime` | ja | `pods` (Kubernetes, `appstore.yaml`) |
 | `description` | ja | 10-300 Zeichen |
 | `status` | nein | `released` (Standard) oder `development`: App noch nicht eingereicht, siehe unten |
 
@@ -17,4 +17,4 @@ Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Ne
 
 Lokal pruefen: `python scripts/check_entry.py apps/<name>.yaml`.
 
-Hinweis: `windows-matlab-app` ist ein Pods-Eintrag in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); `ubuntu-app` und `windows-desktop-app` sind weiterhin VM-Apps.
+Hinweis: `windows-matlab-app` ist ein Pods-Eintrag in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); die VM-Apps `ubuntu-app` und `windows-desktop-app` sind aus der Registry entfernt (der OpenStack-VM-Pfad gibt es nicht mehr, Windows kommt spaeter ueber KubeVirt).

@@ -1,5 +1,0 @@
-name: ubuntu-app
-repo: https://github.com/DHBW-AppStore-T3/Ubuntu-App
-owner: DHBW-AppStore-T3
-runtime: vm
-description: "Linux-Lernumgebung per SSH auf einer gemeinsamen Ubuntu-VM, mit Uebungsaufgaben."
