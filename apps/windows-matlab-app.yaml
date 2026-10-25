@@ -2,5 +2,5 @@ name: windows-matlab-app
 repo: https://github.com/DHBW-AppStore-T3/Windows-Matlab-App
 owner: DHBW-AppStore-T3
 runtime: kubevirt-vm
-status: development   # noch nicht eingereicht: kein Versions-Tag, Image per Tag statt Digest
-description: "Windows-Desktop (Wine) im Browser mit MATLAB, ein Pod pro Person. vCPU und RAM waehlbar."
+status: development
+description: "Windows 11 Desktop mit MATLAB R2024b im Browser, eine VM pro Person (KubeVirt + Cinder CSI)."
