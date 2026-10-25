@@ -63,6 +63,10 @@ class Contract(unittest.TestCase):
         self.c["image"] = self.c["image"].replace("ghcr.io/dhbw-appstore-t3/", "ghcr.io/dhbw-appstore-t3-evil/")
         self.assertEqual(locs(self.doc, allow_tags=True), {"workload.containers[0].image"})
 
+    def test_a_platform_package_is_no_app_image(self):
+        self.c["image"] = self.c["image"].replace("ghcr.io/dhbw-appstore-t3/apps/demo-ide", "ghcr.io/dhbw-appstore-t3/backend")
+        self.assertEqual(locs(self.doc, allow_tags=True), {"workload.containers[0].image"})
+
     def test_unquoted_cpu_is_rejected(self):
         self.c["resources"]["cpu"] = 1
         self.assertEqual(locs(self.doc), {"workload.containers[0].resources.cpu"})

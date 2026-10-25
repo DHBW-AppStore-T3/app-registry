@@ -23,7 +23,9 @@ import sys
 
 import yaml
 
-REGISTRY_PREFIX = "ghcr.io/dhbw-appstore-t3/"
+# The apps' packages (app-ci publishes to apps/<name>), not every package of the organisation: the same
+# allowlist as the platform's (APP_IMAGE_REGISTRY_ALLOWLIST, review S16).
+REGISTRY_PREFIX = "ghcr.io/dhbw-appstore-t3/apps/"
 MAX_CPU_M, MAX_MEM_MI, MAX_STORAGE_MI, MAX_CONTAINERS = 4000, 8192, 20 * 1024, 3
 MAX_FILE_VARIABLE_BYTES = 1024 * 1024
 
