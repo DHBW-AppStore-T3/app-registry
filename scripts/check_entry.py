@@ -135,8 +135,12 @@ def check_spec(entry: dict, text: str, allow_tags: bool = False) -> list[str]:
         return errs
     if data.get("name") != entry["name"]:
         errs.append(f"{SPEC_FILE}: name {data.get('name')!r} must equal the registry name {entry['name']!r}")
-    if data.get("runtime") != "kubernetes":
-        errs.append(f"{SPEC_FILE}: runtime is {data.get('runtime')!r}, registry runtime 'pods' needs 'kubernetes'")
+    registry_runtime = entry.get("runtime", "pods")
+    spec_runtime = data.get("runtime")
+    if registry_runtime == "pods" and spec_runtime != "kubernetes":
+        errs.append(f"{SPEC_FILE}: runtime is {spec_runtime!r}, registry runtime 'pods' needs 'kubernetes'")
+    elif registry_runtime == "kubevirt-vm" and spec_runtime != "kubevirt-vm":
+        errs.append(f"{SPEC_FILE}: runtime is {spec_runtime!r}, registry runtime 'kubevirt-vm' needs 'kubevirt-vm'")
     return errs
 
 

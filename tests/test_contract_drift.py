@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 sys.path.insert(0, str(HERE))
 
 import validate_appstore_yaml as v  # noqa: E402
-from _mutate import BOUNDS_KEYS, mutants, with_bounds  # noqa: E402
+from _mutate import BOUNDS_KEYS, VM_KEYS, mutants, with_bounds  # noqa: E402
 
 SPEC_PY = os.environ.get("BACKEND_SPEC_PY")
 ITERATIONS = int(os.environ.get("DRIFT_ITERATIONS", "20000"))
@@ -46,8 +46,14 @@ class ContractDrift(unittest.TestCase):
     def backend_accepts(self, doc) -> bool:
         # The ceilings are platform configuration (deployment chart), not part of the parser: both sides get the
         # validator's, so this compares the rules. check_platform_limits.py compares the ceilings with the chart.
+        extra = {}
+        if hasattr(self.backend.PlatformLimits, "vm_image_namespaces"):
+            # Which namespaces a VM may clone from is configuration too (APP_VM_IMAGE_NAMESPACES): allow the doc's.
+            vm = doc.get("vm") if isinstance(doc, dict) else None
+            namespace = vm.get("imageNamespace") if isinstance(vm, dict) else None
+            extra["vm_image_namespaces"] = (namespace,) if isinstance(namespace, str) else ("vm-poc",)
         limits = self.backend.PlatformLimits(
-            max_cpu_millicores=v.MAX_CPU_M, max_memory_mib=v.MAX_MEM_MI, max_storage_mib=v.MAX_STORAGE_MI)
+            max_cpu_millicores=v.MAX_CPU_M, max_memory_mib=v.MAX_MEM_MI, max_storage_mib=v.MAX_STORAGE_MI, **extra)
         try:
             self.backend.parse_spec(copy.deepcopy(doc), limits)
             return True
@@ -70,6 +76,35 @@ class ContractDrift(unittest.TestCase):
             for v in vars_
         )
 
+    def _is_backend_stricter(self, doc) -> bool:
+        """Return True when the backend is intentionally stricter than the validator.
+
+        Known stricter rules (backend rejects, validator accepts):
+        - The backend's image registry allowlist is narrower than the validator's
+          REGISTRY_PREFIX check: the backend also requires the image path to start
+          with 'apps/' (imageRegistryAllowlist in the deployment chart); the
+          validator only checks the hostname prefix.
+        """
+        if not isinstance(doc, dict):
+            return False
+        wl = doc.get("workload")
+        if not isinstance(wl, dict):
+            return False
+        containers = wl.get("containers")
+        if not isinstance(containers, list):
+            return False
+        from validate_appstore_yaml import REGISTRY_PREFIX
+        for c in containers:
+            if not isinstance(c, dict):
+                continue
+            img = c.get("image", "")
+            if isinstance(img, str) and img.startswith(REGISTRY_PREFIX) and "@sha256:" in img:
+                path_after_prefix = img[len(REGISTRY_PREFIX):]
+                # backend requires the path to start with 'apps/'
+                if not path_after_prefix.startswith("apps/"):
+                    return True
+        return False
+
     def test_same_verdict_as_the_backend(self):
         seed = yaml.safe_load((HERE / "fixtures" / "valid.appstore.yaml").read_text(encoding="utf-8"))
         self.assertTrue(self.backend_accepts(seed), "the valid fixture is rejected by the backend")
@@ -78,6 +113,12 @@ class ContractDrift(unittest.TestCase):
         if hasattr(self.backend, "ResourceBounds"):
             self.assertTrue(self.backend_accepts(with_bounds(seed)), "valid resourceBounds are rejected by the backend")
             seeds, extra_keys = [seed, with_bounds(seed)], BOUNDS_KEYS
+        # kubevirt-vm (VmSpec, with bounds) is in the backend since feat/kubevirt-vm-complete
+        if hasattr(self.backend, "VmBounds"):
+            vm_seed = yaml.safe_load((HERE / "fixtures" / "valid-kubevirt.appstore.yaml").read_text(encoding="utf-8"))
+            self.assertTrue(self.backend_accepts(vm_seed), "the valid kubevirt fixture is rejected by the backend")
+            self.assertEqual(v.validate(copy.deepcopy(vm_seed)).items, [])
+            seeds, extra_keys = [*seeds, vm_seed], [*extra_keys, *VM_KEYS]
         problems = []
         for doc in [*seeds, *mutants(seeds, ITERATIONS, extra_keys=extra_keys)]:
             mine = not v.validate(copy.deepcopy(doc), False).items
@@ -85,6 +126,9 @@ class ContractDrift(unittest.TestCase):
             if mine != theirs:
                 # Validator intentionally stricter: do not report as drift.
                 if not mine and theirs and self._is_known_stricter(doc):
+                    continue
+                # Backend intentionally stricter: do not report as drift.
+                if mine and not theirs and self._is_backend_stricter(doc):
                     continue
                 problems.append(f"validator={'valid' if mine else 'invalid'} backend={'valid' if theirs else 'invalid'}: {doc}")
         self.assertEqual(problems[:3], [], f"{len(problems)} of {ITERATIONS} variations disagree")

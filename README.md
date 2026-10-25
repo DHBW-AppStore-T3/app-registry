@@ -15,7 +15,7 @@ Dieses Repo enthaelt
 
 Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der Wahrheit des AppStores: Apps und Versionen werden im AppStore selbst registriert (siehe unten).
 
-## Registrierte Apps (Stand 2026-10-24)
+## Registrierte Apps (Stand 2026-10-25)
 
 | App | Runtime | Version | Hinweis |
 |---|---|---|---|
@@ -25,8 +25,9 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 | online-ide | pods | `v2.0.0` | code-server pro Person |
 | windows-matlab-app | pods | - | in Entwicklung (`status: development`): Wine-Desktop mit MATLAB, vCPU/RAM per `resourceBounds` waehlbar; noch kein Versions-Tag, Image per Tag statt Digest |
 | template-app | pods | `v2.0.0` | Vorlage (nginx) |
+| ubuntu-app | pods | `v2.0.0` | Web-Terminal (ttyd) pro Person statt SSH auf einer gemeinsamen VM, ohne sudo; GNU-Userland, Egress `internet` |
 
-Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide und pgadmin sind VM-Versionen und im AppStore nicht mehr nutzbar (eine Version ohne `appstore.yaml` wird abgelehnt). `ubuntu-app` und `windows-desktop-app` (reine VM-Apps) sind aus der Registry entfernt; Windows kommt spaeter ueber KubeVirt.
+Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide, pgadmin und ubuntu-app sind VM-Versionen und im AppStore nicht mehr nutzbar (eine Version ohne `appstore.yaml` wird abgelehnt). `windows-desktop-app` (reine OpenStack-VM-App) ist aus der Registry entfernt; Windows laeuft kuenftig ueber KubeVirt (`windows-matlab-app`, `runtime: kubevirt-vm`).
 
 ## So kommt eine neue App in den AppStore (Schritt fuer Schritt)
 
@@ -136,7 +137,7 @@ PR gegen dieses Repo mit `apps/<name>.yaml`:
 name: meine-app            # = Dateiname, ^[a-z][a-z0-9-]{0,30}$
 repo: https://github.com/DHBW-AppStore-T3/meine-app
 owner: DHBW-AppStore-T3    # GitHub-User oder org/team
-runtime: pods              # pods
+runtime: pods              # pods | kubevirt-vm
 description: "Mindestens zehn Zeichen, maximal 300."
 ```
 

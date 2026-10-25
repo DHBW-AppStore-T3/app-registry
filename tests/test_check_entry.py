@@ -111,7 +111,11 @@ class CheckEntry(unittest.TestCase):
         errs = self.run_check(entry(name="andere-app"), FakeGitHub({"appstore.yaml": SPEC}))
         self.assertEqual(len(errs), 1)
         self.assertIn("must equal the registry name", errs[0])
-        vm_spec = yaml.safe_dump({"apiVersion": "appstore/v2", "name": "demo-ide", "runtime": "openstack-vm"})
+        vm_spec = yaml.safe_dump({
+            "apiVersion": "appstore/v2", "name": "demo-ide", "runtime": "kubevirt-vm",
+            "vm": {"cpuCores": 2, "memoryGiB": 4, "diskGiB": 50, "imageRef": "some-image"},
+            "access": [{"type": "url", "template": "https://{workload}.{domain}"}],
+        })
         errs = self.run_check(entry(), FakeGitHub({"appstore.yaml": vm_spec}))
         self.assertEqual(len(errs), 1)
         self.assertIn("needs 'kubernetes'", errs[0])
