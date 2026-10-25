@@ -16,6 +16,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_entry import image_pullable  # noqa: E402
+from validate_appstore_yaml import UnsafeYaml, load_yaml  # noqa: E402
 
 
 def images(spec: object) -> list[str]:
@@ -30,8 +31,8 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     try:
-        spec = yaml.safe_load(Path(argv[0]).read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
+        spec = load_yaml(Path(argv[0]).read_bytes())
+    except (OSError, yaml.YAMLError, UnsafeYaml) as exc:
         print(f"::error file={argv[0]}::cannot read/parse: {exc}")
         return 2
     failed = 0

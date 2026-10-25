@@ -111,6 +111,12 @@ class Contract(unittest.TestCase):
         self.doc["variables"][0]["maxSize"] = "2Mi"
         self.assertEqual(locs(self.doc), {"variables[0].maxSize"})
 
+    def test_file_variable_needs_an_ext_list(self):
+        del self.doc["variables"][0]["ext"]
+        self.assertEqual(locs(self.doc), {"variables[0].ext"})
+        self.doc["variables"][0]["ext"] = []  # empty list = no restriction in the backend: refused as well
+        self.assertEqual(locs(self.doc), {"variables[0].ext"})
+
     def test_access_template_must_be_https_with_known_placeholders(self):
         self.doc["access"][0]["template"] = "http://{workload}"
         self.doc["access"][1]["username"] = "{nope}"
@@ -192,10 +198,6 @@ class Robustness(unittest.TestCase):
             v.validate(doc, True)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class KubevirtVm(unittest.TestCase):
     """``vm`` of a kubevirt-vm app: the same limits as VmSpec in the backend."""
 
@@ -244,3 +246,34 @@ class KubevirtVm(unittest.TestCase):
         self.assertEqual(locs(self.doc(bounds=too_big)), {"vm.bounds.cpuCores.max"})
         self.assertEqual(locs(self.doc(cpuCores=1, bounds=self.BOUNDS)), {"vm.cpuCores"})
         self.assertEqual(locs(self.doc(bounds={"cpuCores": self.BOUNDS["cpuCores"]})), {"vm.bounds.memoryGiB"})
+
+
+class YamlLimits(unittest.TestCase):
+    """The same three rules as the backend's safe_yaml: size, aliases, nesting."""
+
+    def test_plain_document_loads(self):
+        self.assertEqual(v.load_yaml(b"a: [1, 2]\nb: {c: d}\n"), {"a": [1, 2], "b": {"c": "d"}})
+
+    def test_aliases_are_refused(self):
+        with self.assertRaisesRegex(v.UnsafeYaml, "aliases"):
+            v.load_yaml(b"a: &x [1]\nb: *x\n")
+
+    def test_billion_laughs_is_refused_without_expanding(self):
+        lol = b"a: &a [x, x, x, x, x, x, x, x, x]\nb: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a]\nc: &c [*b, *b, *b, *b, *b, *b, *b, *b, *b]\n"
+        with self.assertRaises(v.UnsafeYaml):
+            v.load_yaml(lol)
+
+    def test_nesting_limit(self):
+        ok = b"[" * v.MAX_YAML_NESTING + b"]" * v.MAX_YAML_NESTING
+        self.assertIsNotNone(v.load_yaml(ok))
+        too_deep = b"[" * (v.MAX_YAML_NESTING + 1) + b"]" * (v.MAX_YAML_NESTING + 1)
+        with self.assertRaisesRegex(v.UnsafeYaml, "nested too deeply"):
+            v.load_yaml(too_deep)
+
+    def test_size_limit(self):
+        with self.assertRaisesRegex(v.UnsafeYaml, "larger than"):
+            v.load_yaml(b"a: " + b"x" * v.MAX_YAML_BYTES)
+
+
+if __name__ == "__main__":
+    unittest.main()

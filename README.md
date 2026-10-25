@@ -8,7 +8,7 @@ Dieses Repo enthaelt
 - `.github/workflows/validate-registry.yml` - Checks dieses Repos (Eintraege, Selbsttests, Workflows), woechentlich auch ohne Aenderung,
 - `.github/workflows/contract-drift.yml` - vergleicht den Validator mit dem Vertragsparser des Backends,
 - `templates/app-ci-caller.yml` - die Datei, die ein App-Repo kopiert,
-- `scripts/validate_appstore_yaml.py` - Validator fuer den App-Vertrag v2 (`appstore.yaml`), nur PyYAML,
+- `scripts/validate_appstore_yaml.py` - Validator fuer den App-Vertrag v2 (`appstore.yaml`), nur PyYAML; lehnt wie das Backend Dateien ueber 256 KiB, mit YAML-Aliasen oder tiefer als 32 Ebenen ab, und verlangt fuer jede Datei-Variable (`type: file`) eine nicht leere `ext`-Liste (z. B. `ext: [zip]`), sonst nimmt das Backend jeden Dateityp ausser Programmen und nicht pruefbaren Archiven an,
 - `scripts/check_entry.py`, `scripts/check_action_refs.py`, `scripts/check_platform_limits.py` - Pruefung der Registry-Eintraege, der `uses:`-Versionen in den Workflows bzw. der Obergrenzen gegen das deployte Chart,
 - `schema/app-entry.schema.json` - JSON-Schema der Registry-Eintraege,
 - `tests/` - Selbsttests und Fixtures.

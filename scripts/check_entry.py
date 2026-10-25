@@ -34,7 +34,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from validate_appstore_yaml import validate  # noqa: E402
+from validate_appstore_yaml import UnsafeYaml, load_yaml, validate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = json.loads((ROOT / "schema" / "app-entry.schema.json").read_text(encoding="utf-8"))
@@ -128,8 +128,8 @@ def latest_tag(owner_repo: str) -> str | None:
 def check_spec(entry: dict, text: str, allow_tags: bool = False) -> list[str]:
     """Problems of the repo's appstore.yaml (strict by default: the version submitted to the AppStore needs digests)."""
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
+        data = load_yaml(text.encode("utf-8", "replace"))
+    except (yaml.YAMLError, UnsafeYaml) as exc:
         return [f"{SPEC_FILE}: invalid YAML: {exc}"]
     result = validate(data, allow_tags=allow_tags)
     errs = [f"{SPEC_FILE}: {loc}: {msg}" for loc, msg in result.items]
@@ -223,9 +223,9 @@ def check(path: Path, offline: bool) -> list[str]:
     images = {}
     for text, label in specs.items():
         try:
-            for c in yaml.safe_load(text)["workload"]["containers"]:
+            for c in load_yaml(text.encode("utf-8", "replace"))["workload"]["containers"]:
                 images.setdefault(c["image"], label)
-        except (yaml.YAMLError, KeyError, TypeError):
+        except (yaml.YAMLError, UnsafeYaml, KeyError, TypeError):
             pass  # already reported by check_spec
     for image, label in sorted(images.items()) if released else []:
         if (problem := image_pullable(image)) is not None:

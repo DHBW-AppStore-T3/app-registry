@@ -65,14 +65,14 @@ class ContractDrift(unittest.TestCase):
 
         Known stricter rules (validator rejects, backend accepts):
         - A file variable without an 'ext' key: the validator requires it so future
-          apps cannot accidentally accept every file type.  ext: [] is still allowed
-          (backward-compatible); only a missing key is rejected (.github#13, item 3.5).
+          apps cannot accidentally accept every file type.  Missing key and ext: [] are
+          both rejected (.github#13, item 3.5).
         """
         vars_ = doc.get("variables") if isinstance(doc, dict) else []
         if not isinstance(vars_, list):
             return False
         return any(
-            isinstance(v, dict) and v.get("type") == "file" and "ext" not in v
+            isinstance(v, dict) and v.get("type") == "file" and not v.get("ext")
             for v in vars_
         )
 

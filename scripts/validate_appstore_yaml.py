@@ -28,6 +28,9 @@ import yaml
 REGISTRY_PREFIX = "ghcr.io/dhbw-appstore-t3/apps/"
 MAX_CPU_M, MAX_MEM_MI, MAX_STORAGE_MI, MAX_CONTAINERS = 4000, 8192, 20 * 1024, 3
 MAX_FILE_VARIABLE_BYTES = 1024 * 1024
+# Same limits as the backend's app/utils/safe_yaml.py, so that an app cannot pass its CI and then be refused at submission.
+MAX_YAML_BYTES = 256 * 1024
+MAX_YAML_NESTING = 32
 
 IMAGE_DIGEST_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?(/[a-z0-9._-]+)+@sha256:[0-9a-f]{64}$")
 IMAGE_TAG_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?(/[a-z0-9._-]+)+:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$")
@@ -51,6 +54,30 @@ class Errors:
 
     def warn(self, loc: str, msg: str) -> None:
         self.warnings.append((loc, msg))
+
+
+class UnsafeYaml(ValueError):
+    """The document is refused before it is loaded."""
+
+
+def load_yaml(raw: bytes) -> object:
+    """``yaml.safe_load`` with the backend's limits: size, no aliases, bounded nesting."""
+    if len(raw) > MAX_YAML_BYTES:
+        raise UnsafeYaml(f"the YAML document is larger than {MAX_YAML_BYTES // 1024} KiB")
+    depth = 0
+    try:
+        for event in yaml.parse(raw, Loader=yaml.SafeLoader):
+            if isinstance(event, yaml.AliasEvent):
+                raise UnsafeYaml("the YAML document uses aliases, which are not allowed")
+            if isinstance(event, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
+                depth += 1
+                if depth > MAX_YAML_NESTING:
+                    raise UnsafeYaml("the YAML document is nested too deeply")
+            elif isinstance(event, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
+                depth -= 1
+    except RecursionError:
+        raise UnsafeYaml("the YAML document is nested too deeply") from None
+    return yaml.safe_load(raw)
 
 
 def cpu_m(v: object) -> int | None:
@@ -245,11 +272,15 @@ def check_variable(e: Errors, loc: str, v: object) -> None:
         e.add(f"{loc}.type", "must be one of file, enum, string")
     if v.get("scope", "deployment") not in ("deployment", "team"):
         e.add(f"{loc}.scope", "must be deployment or team")
-    need_str_list(e, f"{loc}.ext", v.get("ext", []))
+    exts = need_str_list(e, f"{loc}.ext", v.get("ext", []))
     values = need_str_list(e, f"{loc}.values", v.get("values", []))
     if "default" in v and v["default"] is not None:
         need_str(e, f"{loc}.default", v["default"])
     if v.get("type") == "file":
+        # Without ext (absent or []) the backend accepts any type except programs and uninspectable archives.
+        # Require a non-empty list so an app cannot accidentally accept more than intended.
+        if not exts and not any(l == f"{loc}.ext" for l, _ in e.items):
+            e.add(f"{loc}.ext", "file variables need a non-empty ext list (e.g. [zip])")
         mp = v.get("mountPath")
         if not mp:
             e.add(f"{loc}.mountPath", "file variables need an absolute mountPath")
@@ -458,9 +489,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--json", action="store_true", help="machine readable output")
     args = ap.parse_args(argv)
     try:
-        with open(args.file, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh)
-    except (OSError, yaml.YAMLError) as exc:
+        with open(args.file, "rb") as fh:
+            data = load_yaml(fh.read())
+    except (OSError, yaml.YAMLError, UnsafeYaml) as exc:
         print(f"::error file={args.file}::cannot read/parse: {exc}")
         return 2 if isinstance(exc, OSError) else 1
     e = validate(data, args.allow_tags)
