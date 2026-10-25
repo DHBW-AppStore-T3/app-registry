@@ -54,6 +54,22 @@ class ContractDrift(unittest.TestCase):
         except self.backend.SpecValidationError:
             return False
 
+    def _is_known_stricter(self, doc) -> bool:
+        """Return True when the validator is intentionally stricter than the backend.
+
+        Known stricter rules (validator rejects, backend accepts):
+        - A file variable without an 'ext' key: the validator requires it so future
+          apps cannot accidentally accept every file type.  ext: [] is still allowed
+          (backward-compatible); only a missing key is rejected (.github#13, item 3.5).
+        """
+        vars_ = doc.get("variables") if isinstance(doc, dict) else []
+        if not isinstance(vars_, list):
+            return False
+        return any(
+            isinstance(v, dict) and v.get("type") == "file" and "ext" not in v
+            for v in vars_
+        )
+
     def test_same_verdict_as_the_backend(self):
         seed = yaml.safe_load((HERE / "fixtures" / "valid.appstore.yaml").read_text(encoding="utf-8"))
         self.assertTrue(self.backend_accepts(seed), "the valid fixture is rejected by the backend")
@@ -67,6 +83,9 @@ class ContractDrift(unittest.TestCase):
             mine = not v.validate(copy.deepcopy(doc), False).items
             theirs = self.backend_accepts(doc)
             if mine != theirs:
+                # Validator intentionally stricter: do not report as drift.
+                if not mine and theirs and self._is_known_stricter(doc):
+                    continue
                 problems.append(f"validator={'valid' if mine else 'invalid'} backend={'valid' if theirs else 'invalid'}: {doc}")
         self.assertEqual(problems[:3], [], f"{len(problems)} of {ITERATIONS} variations disagree")
 
