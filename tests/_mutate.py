@@ -16,6 +16,10 @@ VALUES: list[Any] = [
     f"ghcr.io/dhbw-appstore-t3-evil/x@{DIGEST}",
     "generated-password", "team-name", "user-name", "none", "internet", "kubernetes", "team", "user",
     "file", "enum", "string", "url", "password", "appstore/v2",
+    # Both sides of every limit, so that a limit changed in the backend shows up as drift: container CPU (4 = 4000m),
+    # memory (8Gi = 8192Mi), and the VM's cpuCores (1-16), memoryGiB (2-32), diskGiB (40-200).
+    "4", "5", "4000m", "4001m", "8Gi", "9Gi", "8192Mi", "8193Mi",
+    2, 16, 17, 32, 33, 39, 40, 200, 201,
 ]
 KEYS = ["x", "name", "from", "value", "expose", "mountPath", "type", "path", "size"]
 BOUNDS_KEYS = ["resourceBounds", "cpu", "memory", "min", "max"]
