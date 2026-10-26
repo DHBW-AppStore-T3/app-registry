@@ -140,6 +140,7 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build (lokal, fuer den Scan)
+        id: scan-build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ matrix.image.context }}
@@ -176,6 +177,39 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           vuln-type: os,library
+
+      # Funde ohne verfuegbaren Fix brechen den Build nicht ab (es gaebe nichts zu tun), sollen aber sichtbar sein:
+      # derselbe Scan noch einmal ohne ignore-unfixed, nur als Bericht in der Job-Summary. Laeuft auch, wenn das
+      # Gate oben rot ist, und schlaegt selbst nie fehl. Ausnahmen aus .trivyignore bleiben ausgenommen.
+      - name: Trivy-Bericht (alle Funde, auch ohne Fix; bricht nicht ab)
+        if: ${{ !cancelled() && steps.scan-build.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: scan-target:${{ github.sha }}
+          severity: ${{ inputs.trivy-severity }}
+          ignore-unfixed: false
+          exit-code: "0"
+          vuln-type: os,library
+          format: table
+          output: trivy-all.txt
+          skip-setup-trivy: true
+
+      - name: Trivy-Bericht in die Job-Summary
+        if: ${{ !cancelled() && steps.scan-build.outcome == 'success' }}
+        env:
+          DOCKERFILE: ${{ matrix.image.dockerfile }}
+          SEVERITY: ${{ inputs.trivy-severity }}
+        run: |
+          {
+            echo "### Trivy: alle $SEVERITY-Funde in \`$DOCKERFILE\`, auch ohne Fix"
+            echo
+            echo "Nur zur Information: den Build brechen nur Funde mit Fix (Spalte *Status* = \`fixed\`, Schritt davor)."
+            echo "\`affected\` / \`will_not_fix\`: es gibt noch keinen Fix; wieder pruefen, wenn die Distribution oder das Paket einen liefert."
+            echo
+            echo '```'
+            if [ -s trivy-all.txt ]; then cat trivy-all.txt; else echo "keine Funde"; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Login ghcr.io
         if: inputs.push && github.event_name != 'pull_request'
