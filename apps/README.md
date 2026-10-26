@@ -17,4 +17,4 @@ Schema: [`../schema/app-entry.schema.json`](../schema/app-entry.schema.json). Ne
 
 Lokal pruefen: `python scripts/check_entry.py apps/<name>.yaml`.
 
-Hinweis: `windows-matlab-app` ist ein KubeVirt-Eintrag (`runtime: kubevirt-vm`) in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide`, `ubuntu-app` und `template-app` laufen als Pods (`appstore.yaml`, Tag `v2.0.0`); die VM-App `windows-desktop-app` ist aus der Registry entfernt (den OpenStack-VM-Pfad gibt es nicht mehr).
+Hinweis: `windows-matlab-app` ist ein KubeVirt-Eintrag (`runtime: kubevirt-vm`) in Entwicklung; `pgadmin`, `jupyter-notebook`, `web-latex`, `online-ide`, `java-ide`, `ubuntu-app` und `template-app` laufen als Pods (`appstore.yaml`; die Version ist jeweils der neueste Git-Tag des App-Repos); die VM-App `windows-desktop-app` ist aus der Registry entfernt (den OpenStack-VM-Pfad gibt es nicht mehr).
