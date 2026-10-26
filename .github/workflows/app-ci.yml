@@ -1,6 +1,9 @@
 # Wiederverwendbare CI/CD-Pipeline fuer AppStore-Apps (Pods).
 # Aufruf aus dem App-Repo: siehe templates/app-ci-caller.yml
 # Ablauf: appstore.yaml pruefen -> hadolint -> bauen -> Smoke-Test -> Trivy -> push -> Digests einsammeln.
+# Jeder Build bekommt das Build-Argument SECURITY_REFRESH (die Run-ID): ein Dockerfile, das es vor seinem
+# apt-get/apk upgrade deklariert, holt damit bei jedem Lauf die aktuellen Sicherheitsupdates (README,
+# "Sicherheitsupdates im Image").
 name: app-ci
 
 on:
@@ -146,6 +149,11 @@ jobs:
           tags: scan-target:${{ github.sha }}
           cache-from: type=gha,scope=${{ steps.meta.outputs.key }}
           cache-to: type=gha,mode=max,scope=${{ steps.meta.outputs.key }}
+          # Ein neuer Wert je Lauf: der Build-Cache kann einen Upgrade-Schritt, der nach ARG SECURITY_REFRESH
+          # steht, nicht aus einem frueheren Lauf wiederverwenden (sonst bleibt das Image auf dem Paketstand des
+          # ersten Builds stehen, auch wenn die Distribution laengst Fixes hat). Schritte vor dem ARG bleiben
+          # gecacht. Dockerfiles ohne dieses ARG ignorieren es.
+          build-args: SECURITY_REFRESH=${{ github.run_id }}
 
       # Das lokal gebaute Image, bevor irgendetwas gepusht wird. Das Skript startet es selbst (docker run) mit
       # $PLATFORM_RUN_FLAGS, dem Sicherheitskontext der Plattform, und prueft, dass die App darin laeuft.
@@ -189,6 +197,8 @@ jobs:
           # Links the ghcr.io package to this repo: without it a later push with GITHUB_TOKEN is refused.
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=${{ steps.meta.outputs.key }}
+          # Derselbe Wert wie beim Scan-Build: die Schichten kommen aus dessen Cache, gepusht wird der gescannte Stand.
+          build-args: SECURITY_REFRESH=${{ github.run_id }}
           provenance: false
 
       - name: Digest festhalten

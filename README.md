@@ -62,15 +62,39 @@ jobs:
       images: '[{"suffix":"","context":"image","dockerfile":"image/Dockerfile","smoke_test":".github/smoke-test.sh"}]'
 ```
 
-Die Vorlage baut und pusht nur bei Aenderungen unter `image/` (wie die bestehenden Apps), Pull Requests bauen und pruefen nur. Zusaetzlich laeuft woechentlich ein Lauf ohne Push, der das Image neu baut und mit Trivy scannt: die Schwachstellen-Datenbank aendert sich auch dann, wenn der Code gleich bleibt.
+Die Vorlage baut und pusht nur bei Aenderungen unter `image/` (wie die bestehenden Apps), Pull Requests bauen und pruefen nur. Zusaetzlich laeuft woechentlich ein Lauf ohne Push, der das Image neu baut (mit den aktuellen Sicherheitsupdates, siehe *Sicherheitsupdates im Image*) und mit Trivy scannt: die Schwachstellen-Datenbank aendert sich auch dann, wenn der Code gleich bleibt. Er prueft den naechsten Build, nicht das ausgerollte Image; das macht `rescan-images.yml` (siehe unten).
 
 Die Pipeline macht:
 1. **validate** - `appstore.yaml` gegen den Vertrag.
 2. **lint** - hadolint auf dem Dockerfile.
-3. **build** - buildx-Build, optional **Smoke-Test**, **Trivy** (Fehler bei behebbaren HIGH/CRITICAL-Funden), dann Push nach `ghcr.io/dhbw-appstore-t3/apps/<app>:<commit-sha>` (auf dem Default-Branch zusaetzlich `:latest`). Bei Pull Requests wird gebaut und gescannt, aber nicht gepusht.
+3. **build** - buildx-Build (mit dem Build-Argument `SECURITY_REFRESH`, siehe *Sicherheitsupdates im Image*), optional **Smoke-Test**, **Trivy** (Fehler bei behebbaren HIGH/CRITICAL-Funden; Funde ohne verfuegbaren Fix brechen nicht ab, es gaebe nichts zu tun), dann Push nach `ghcr.io/dhbw-appstore-t3/apps/<app>:<commit-sha>` (auf dem Default-Branch zusaetzlich `:latest`). Bei Pull Requests wird gebaut und gescannt, aber nicht gepusht.
 4. **collect** - gibt `digest`, `digests` (JSON) und `image` (`ghcr.io/...@sha256:...`, bei mehreren Images das alphabetisch erste) als Workflow-Outputs aus; der Digest jedes Images steht auch in der Job-Summary.
 
 **Smoke-Test:** `smoke_test` je Image ist der Pfad eines Skripts im App-Repo (Vorlage: [`templates/smoke-test-example.sh`](templates/smoke-test-example.sh)). Die Pipeline fuehrt es mit dem lokal gebauten Image aus, **bevor** gescannt oder gepusht wird, und setzt `IMAGE` und `PLATFORM_RUN_FLAGS` (der Sicherheitskontext der Plattform: UID 1000, read-only Root, keine Capabilities, kein Privilege-Escalation). Das Skript startet das Image damit, wartet auf die App und prueft sie (Login, ein echter Request). Schlaegt es fehl, wird nichts gepusht.
+
+#### Sicherheitsupdates im Image (`SECURITY_REFRESH`)
+Base-Images werden upstream oft erst Tage nach einem Fix der Distribution neu gebaut. Damit ein Image die Fixes trotzdem sofort hat, aktualisiert es seine Pakete beim Build selbst. Das wirkt nur, wenn der Build-Cache diesen Schritt nicht aus einem frueheren Lauf wiederverwendet: eine unveraenderte `RUN apk upgrade`-Zeile bleibt sonst auf dem Paketstand ihres ersten Builds (so geschehen bei template-app und pgAdmin am 2026-10-26). Die Pipeline gibt deshalb jedem Build `SECURITY_REFRESH=<Run-ID>` mit, ein neuer Wert je Lauf. Im Dockerfile:
+
+```dockerfile
+# ... schwere, selten geaenderte Schritte (Pakete installieren, pip install) ...
+
+# Sicherheitsupdates bei jedem CI-Build: app-ci.yml setzt SECURITY_REFRESH je Lauf neu, ab hier
+# kein Build-Cache aus frueheren Laeufen.
+ARG SECURITY_REFRESH
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+# Alpine: RUN apk upgrade --no-cache
+
+# ... COPY der App, USER ...
+```
+
+- **Wohin:** so spaet wie moeglich, aber noch als root und vor dem Wechsel auf den App-User. Ein neuer Wert baut diesen Schritt **und alles danach** neu; was davor steht, bleibt gecacht (z.B. TeX Live, pip-Pakete).
+- **Keine Pins einzelner CVEs:** Pakete mit Mindestversionen nachzuziehen (`apk add "curl>=8.23.0-r0"`) ist mit diesem Muster unnoetig, das Upgrade nimmt immer den neuesten Stand der Distribution.
+- **Was Trivy danach noch meldet**, behebt kein Paket-Upgrade: Bibliotheken in Sprach-Paketen (pip, npm, z.B. das in code-server gebuendelte), ein veraltetes Base-Image (neue Version im `FROM`) oder ein Fix, den es nur in einer neueren Distribution gibt. Dann die Abhaengigkeit oder das `FROM` aktualisieren, oder eine begruendete, befristete Ausnahme in `.trivyignore` (`exp:`).
+- **Lokal** (`docker build` ohne das Argument) ist das ARG leer, der Schritt wird wie jeder andere gecacht. Dockerfiles ohne dieses ARG ignorieren das Argument.
+
+**Wie ein Fix in die laufenden Deployments kommt.** Der woechentliche Lauf der App-CI baut frisch und ist gruen, sobald die Distribution einen Fix hat; das ausgerollte Image aendert sich dadurch nicht, denn `appstore.yaml` pinnt einen Digest. Ob die freigegebenen Images betroffen sind, prueft `rescan-images.yml` in diesem Repo (montags: das Image auf dem neuesten Versions-Tag und auf dem Default-Branch jeder App). Ist er rot: in der App einen Build auf dem Default-Branch ausloesen (Push unter `image/` oder *Run workflow*), den neuen Digest in `appstore.yaml` eintragen, Tag setzen, einreichen, freigeben (Schritte 4, 6, 7).
 
 Optionale Inputs (`with:`): `registry-ref` (nur Sonderfaelle, siehe *Pinnen und Releases*), `app-name` (Default: Repo-Name in Kleinbuchstaben), `images` (JSON-Liste fuer mehrere Container/Dockerfiles, je `suffix`, `context`, `dockerfile`), `appstore-yaml`, `strict-image-pin`, `trivy-severity`, `push`. Es werden keine Secrets benoetigt, nur das automatische `GITHUB_TOKEN`.
 
