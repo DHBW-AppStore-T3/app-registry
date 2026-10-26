@@ -15,17 +15,20 @@ Dieses Repo enthaelt
 
 Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der Wahrheit des AppStores: Apps und Versionen werden im AppStore selbst registriert (siehe unten).
 
-## Registrierte Apps (Stand 2026-10-25)
+## Registrierte Apps
 
-| App | Runtime | Version | Hinweis |
-|---|---|---|---|
-| pgadmin | pods | `v2.0.0` | zwei Container (pgAdmin + PostgreSQL/Pagila), Team-Scope |
-| jupyter-notebook | pods | `v2.0.0` | JupyterLab pro Person, Egress `internet` |
-| web-latex | pods | `v2.0.0` | Editor pro Person, optionale Starter-ZIP. Achtung: `v2.0.0` und `v2.0.1` sind auf dem Cluster nicht benutzbar (der Ingress routet nur `/login`), Fix in Web-LaTeX#6 als `v2.0.2` |
-| online-ide | pods | `v2.0.0` | code-server pro Person |
-| windows-matlab-app | pods | - | in Entwicklung (`status: development`): Wine-Desktop mit MATLAB, vCPU/RAM per `resourceBounds` waehlbar; noch kein Versions-Tag, Image per Tag statt Digest |
-| template-app | pods | `v2.0.0` | Vorlage (nginx) |
-| ubuntu-app | pods | `v2.0.0` | Web-Terminal (ttyd) pro Person statt SSH auf einer gemeinsamen VM, ohne sudo; GNU-Userland, Egress `internet` |
+| App | Runtime | Hinweis |
+|---|---|---|
+| pgadmin | pods | zwei Container (pgAdmin + PostgreSQL/Pagila), Team-Scope |
+| jupyter-notebook | pods | JupyterLab pro Person, Egress `internet` |
+| web-latex | pods | Editor pro Person, optionale Starter-ZIP |
+| online-ide | pods | code-server pro Person, optionale Aufgaben-ZIP |
+| java-ide | pods | code-server mit JDK 21 und Maven pro Person |
+| template-app | pods | Vorlage (nginx) |
+| ubuntu-app | pods | Web-Terminal (ttyd) pro Person, ohne sudo; GNU-Userland, Egress `internet` |
+| windows-matlab-app | kubevirt-vm | in Entwicklung (`status: development`): Windows 11 mit MATLAB als VM pro Person (Golden-Image), Zugang per noVNC; vCPU/RAM und Netzwerk im Wizard waehlbar |
+
+Die Version einer App ist ihr neuester Git-Tag im App-Repo: den reicht man im AppStore ein, und `rescan-images.yml` prueft das Image dieses Tags. Hier stehen bewusst keine Versionsnummern, sie veralten mit jedem Release.
 
 Aeltere `v1.x`-Tags von jupyter-notebook, web-latex, online-ide, pgadmin und ubuntu-app sind VM-Versionen und im AppStore nicht mehr nutzbar (eine Version ohne `appstore.yaml` wird abgelehnt). `windows-desktop-app` (reine OpenStack-VM-App) ist aus der Registry entfernt; Windows laeuft kuenftig ueber KubeVirt (`windows-matlab-app`, `runtime: kubevirt-vm`).
 
