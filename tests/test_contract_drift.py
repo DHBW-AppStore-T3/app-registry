@@ -118,7 +118,12 @@ class ContractDrift(unittest.TestCase):
             vm_seed = yaml.safe_load((HERE / "fixtures" / "valid-kubevirt.appstore.yaml").read_text(encoding="utf-8"))
             self.assertTrue(self.backend_accepts(vm_seed), "the valid kubevirt fixture is rejected by the backend")
             self.assertEqual(v.validate(copy.deepcopy(vm_seed)).items, [])
-            seeds, extra_keys = [*seeds, vm_seed], [*extra_keys, *VM_KEYS]
+            # The same VM without bounds: with them, the defaults must lie inside the bounds, which hides the
+            # limits themselves (cpuCores 1-16, memoryGiB 2-32, diskGiB 40-200) from the mutations.
+            vm_plain = copy.deepcopy(vm_seed)
+            del vm_plain["vm"]["bounds"]
+            self.assertTrue(self.backend_accepts(vm_plain), "the kubevirt fixture without bounds is rejected by the backend")
+            seeds, extra_keys = [*seeds, vm_seed, vm_plain], [*extra_keys, *VM_KEYS]
         problems = []
         for doc in [*seeds, *mutants(seeds, ITERATIONS, extra_keys=extra_keys)]:
             mine = not v.validate(copy.deepcopy(doc), False).items
