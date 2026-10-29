@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 sys.path.insert(0, str(HERE))
 
 import validate_appstore_yaml as v  # noqa: E402
-from _mutate import BOUNDS_KEYS, VM_KEYS, mutants, with_bounds  # noqa: E402
+from _mutate import BOUNDS_KEYS, NETWORK_KEYS, VM_KEYS, mutants, with_bounds  # noqa: E402
 
 SPEC_PY = os.environ.get("BACKEND_SPEC_PY")
 ITERATIONS = int(os.environ.get("DRIFT_ITERATIONS", "20000"))
@@ -108,11 +108,14 @@ class ContractDrift(unittest.TestCase):
     def test_same_verdict_as_the_backend(self):
         seed = yaml.safe_load((HERE / "fixtures" / "valid.appstore.yaml").read_text(encoding="utf-8"))
         self.assertTrue(self.backend_accepts(seed), "the valid fixture is rejected by the backend")
-        seeds, extra_keys = [seed], []
+        # network: (allowed/default) and the older egress / podNetwork / userChoices of apps up to v2.x
+        legacy = yaml.safe_load((HERE / "fixtures" / "valid-legacy-network.appstore.yaml").read_text(encoding="utf-8"))
+        self.assertTrue(self.backend_accepts(legacy), "the legacy network fixture is rejected by the backend")
+        seeds, extra_keys = [seed, legacy], list(NETWORK_KEYS)
         # resourceBounds is only in the backend once feat/resource-overrides is merged into dev
         if hasattr(self.backend, "ResourceBounds"):
             self.assertTrue(self.backend_accepts(with_bounds(seed)), "valid resourceBounds are rejected by the backend")
-            seeds, extra_keys = [seed, with_bounds(seed)], BOUNDS_KEYS
+            seeds, extra_keys = [*seeds, with_bounds(seed)], [*extra_keys, *BOUNDS_KEYS]
         # kubevirt-vm (VmSpec, with bounds) is in the backend since feat/kubevirt-vm-complete
         if hasattr(self.backend, "VmBounds"):
             vm_seed = yaml.safe_load((HERE / "fixtures" / "valid-kubevirt.appstore.yaml").read_text(encoding="utf-8"))
