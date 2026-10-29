@@ -142,5 +142,21 @@ class ContractDrift(unittest.TestCase):
         self.assertEqual(problems[:3], [], f"{len(problems)} of {ITERATIONS} variations disagree")
 
 
+    def test_scope_choice_same_verdict_as_the_backend(self):
+        """``scopeChoice`` (the person deploying chooses the scope) is only in the backend once feat/scope-choice is merged."""
+        if "scope_choice" not in self.backend.AppSpec.model_fields:
+            self.skipTest("the backend does not know scopeChoice yet")
+        seed = yaml.safe_load((HERE / "fixtures" / "valid.appstore.yaml").read_text(encoding="utf-8"))
+        problems = []
+        for scope in ("team", "user", "everyone", None, 1):
+            for choice in (True, False, None, "yes", "true", 1, 0, [], {}, "user"):
+                doc = copy.deepcopy(seed)
+                doc["scope"], doc["scopeChoice"] = scope, choice
+                mine, theirs = not v.validate(copy.deepcopy(doc), False).items, self.backend_accepts(doc)
+                if mine != theirs:
+                    problems.append(f"scope={scope!r} scopeChoice={choice!r}: validator={mine} backend={theirs}")
+        self.assertEqual(problems, [])
+
+
 if __name__ == "__main__":
     unittest.main()

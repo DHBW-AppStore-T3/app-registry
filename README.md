@@ -44,6 +44,7 @@ Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `ap
 - `image` muss mit **Digest** gepinnt sein, Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/` erlaubt. Konvention fuer App-Images: `ghcr.io/dhbw-appstore-t3/apps/<app>@sha256:<64 hex>` (die Plattform-Images `backend`, `worker`, `frontend` liegen eine Ebene darueber).
 - Genau ein Container hat `expose` (Port 1024-65535). `expose.path` ist die **Ingress-Route** (Prefix-Match), kein Startpfad: nur dieser Pfad und alles darunter erreicht die App, normalerweise also `/`. Der Validator warnt bei allem anderen. Max. 3 Container, Storage max. 20 Gi, je Container max. 4 CPU / 8192 Mi (Obergrenzen der Plattform, `podApps.maxCpu/maxMemory` im Helm-Chart; Stand dieses Repos: siehe Hinweis unten).
 - Optional `resourceBounds` je Container (`cpu` und `memory` mit `min`/`max`): der Bereich, aus dem Nutzer beim Deployen waehlen; `resources` sind der Standardwert und muessen darin liegen, `max` darf die Obergrenzen nicht uebersteigen.
+- `scope` (`team` oder `user`, Standard `team`): ein Workload je Team oder je Person. Mit `scopeChoice: true` (optional, Standard `false`) darf die Person beim Deployen im Wizard zwischen beidem waehlen; `scope` ist dann der Startwert. Ohne `scopeChoice` ist `scope` fest.
 - `network` (optional, Standard: nichts erlaubt): was die Pods erreichen duerfen und was die Person beim Deployen im Wizard aendern darf. Zwei Einstellungen, jede mit denselben zwei Feldern (beide Standard `false`):
 
   ```yaml

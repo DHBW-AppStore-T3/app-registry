@@ -423,8 +423,8 @@ def check_network(e: Errors, data: dict) -> None:
 
 def validate(data: object, allow_tags: bool = False) -> Errors:
     e = Errors()
-    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "network", "egress", "podNetwork",
-                   "userChoices", "variables", "access"},
+    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "scopeChoice", "workload", "vm", "network", "egress",
+                   "podNetwork", "userChoices", "variables", "access"},
                      {"apiVersion", "name", "runtime"}):
         return e
     if data.get("apiVersion") != "appstore/v2":
@@ -436,6 +436,8 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
         e.add("runtime", "must be kubernetes or kubevirt-vm")
     if data.get("scope", "team") not in ("team", "user"):
         e.add("scope", "must be team or user")
+    if "scopeChoice" in data and not isinstance(data["scopeChoice"], bool):
+        e.add("scopeChoice", "must be true or false")
     check_network(e, data)
     wl = data.get("workload")
     if runtime == "kubernetes" and wl is None:
