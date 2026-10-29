@@ -248,6 +248,54 @@ class KubevirtVm(unittest.TestCase):
         self.assertEqual(locs(self.doc(bounds={"cpuCores": self.BOUNDS["cpuCores"]})), {"vm.bounds.memoryGiB"})
 
 
+class NetworkBlock(unittest.TestCase):
+    """``network:`` (internet, podNetwork: allowed + default), and the older keys of apps up to v2.x."""
+
+    def doc(self, network):
+        doc = load("valid.appstore.yaml")
+        doc["network"] = network
+        return doc
+
+    def test_every_state_of_a_setting_is_valid(self):
+        for allowed in (False, True):
+            for default in (False, True):
+                setting = {"allowed": allowed, "default": default}
+                self.assertEqual(locs(self.doc({"internet": setting, "podNetwork": setting})), set())
+
+    def test_a_missing_block_or_setting_means_never_available(self):
+        doc = load("valid.appstore.yaml")
+        del doc["network"]
+        self.assertEqual(locs(doc), set())
+        self.assertEqual(locs(self.doc({})), set())
+        self.assertEqual(locs(self.doc({"internet": {}})), set())
+
+    def test_unknown_keys_and_non_booleans_are_refused_with_their_path(self):
+        self.assertEqual(locs(self.doc({"dns": {"allowed": True}})), {"network.dns"})
+        self.assertEqual(locs(self.doc({"internet": {"ports": [25]}})), {"network.internet.ports"})
+        self.assertEqual(locs(self.doc({"internet": {"allowed": "yes"}})), {"network.internet.allowed"})
+        self.assertEqual(locs(self.doc({"podNetwork": {"default": 1}})), {"network.podNetwork.default"})
+        self.assertEqual(locs(self.doc({"internet": True})), {"network.internet"})
+        self.assertEqual(locs(self.doc(None)), {"network"})
+
+    def test_the_older_keys_are_still_read(self):
+        self.assertEqual(v.validate(load("valid-legacy-network.appstore.yaml")).items, [])
+        doc = load("valid.appstore.yaml")
+        del doc["network"]
+        doc.update(egress="none", podNetwork="namespace", userChoices={"internet": True})
+        self.assertEqual(locs(doc), set())
+        for key, value in (("egress", "all"), ("egress", None), ("podNetwork", "cluster"), ("podNetwork", None),
+                           ("userChoices", {"dns": True}), ("userChoices", {"internet": 1})):
+            bad = copy.deepcopy(doc)
+            bad[key] = value
+            self.assertTrue(locs(bad), f"{key}: {value!r} must be refused")
+
+    def test_the_older_keys_cannot_be_mixed_with_the_network_block(self):
+        for legacy in ({"egress": "internet"}, {"podNetwork": "namespace"}, {"userChoices": {"internet": True}}):
+            doc = self.doc({"internet": {"allowed": True}})
+            doc.update(legacy)
+            self.assertEqual(locs(doc), {"network"})
+
+
 class YamlLimits(unittest.TestCase):
     """The same three rules as the backend's safe_yaml: size, aliases, nesting."""
 

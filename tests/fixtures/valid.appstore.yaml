@@ -23,7 +23,9 @@ workload:
   storage:
     size: 5Gi
     mountPath: /home/project
-egress: none
+network:
+  internet: { allowed: true, default: false }
+  podNetwork: { allowed: true, default: false }
 variables:
   - name: tasks
     type: file

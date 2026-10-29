@@ -388,10 +388,43 @@ def check_vm(e: Errors, vm: object) -> None:
                 e.add(f"vm.{field}", f"the default must lie within bounds.{field}")
 
 
+LEGACY_NETWORK_KEYS = ("egress", "podNetwork", "userChoices")
+
+
+def check_network(e: Errors, data: dict) -> None:
+    """``network:`` (what the pods may reach, and what the person deploying may change), or the older keys.
+
+    ``network.internet`` and ``network.podNetwork`` each take ``allowed`` (a choice in the wizard) and ``default``
+    (the value it starts with, or the fixed one where it is not allowed); both false when left out. The older
+    ``egress`` / ``podNetwork`` / ``userChoices`` of apps up to v2.x are still read, not combined with ``network``.
+    """
+    legacy = [k for k in LEGACY_NETWORK_KEYS if k in data]
+    if "network" in data:
+        if legacy:
+            e.add("network", "cannot be combined with the older egress / podNetwork / userChoices")
+        net = data["network"]
+        if only_keys(e, "network", net, {"internet", "podNetwork"}):
+            for key, setting in net.items():
+                if only_keys(e, f"network.{key}", setting, {"allowed", "default"}):
+                    for field, value in setting.items():
+                        if not isinstance(value, bool):
+                            e.add(f"network.{key}.{field}", "must be true or false")
+        return
+    if "egress" in data and data["egress"] not in ("none", "internet"):
+        e.add("egress", "must be none or internet")
+    if "podNetwork" in data and data["podNetwork"] not in ("none", "namespace"):
+        e.add("podNetwork", "must be none or namespace")
+    choices = data.get("userChoices")
+    if choices is not None and only_keys(e, "userChoices", choices, {"internet", "podNetwork"}):
+        for key, value in choices.items():
+            if not isinstance(value, bool):
+                e.add(f"userChoices.{key}", "must be true or false")
+
+
 def validate(data: object, allow_tags: bool = False) -> Errors:
     e = Errors()
-    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "egress", "podNetwork", "userChoices", "variables",
-                   "access"},
+    if not only_keys(e, "", data, {"apiVersion", "name", "runtime", "scope", "workload", "vm", "network", "egress", "podNetwork",
+                   "userChoices", "variables", "access"},
                      {"apiVersion", "name", "runtime"}):
         return e
     if data.get("apiVersion") != "appstore/v2":
@@ -403,17 +436,7 @@ def validate(data: object, allow_tags: bool = False) -> Errors:
         e.add("runtime", "must be kubernetes or kubevirt-vm")
     if data.get("scope", "team") not in ("team", "user"):
         e.add("scope", "must be team or user")
-    if data.get("egress", "none") not in ("none", "internet"):
-        e.add("egress", "must be none or internet")
-    # Defaults of the author for the pod network, and which of the two network settings
-    # (internet, podNetwork) the person deploying may switch (issue .github#11).
-    if data.get("podNetwork", "none") not in ("none", "namespace"):
-        e.add("podNetwork", "must be none or namespace")
-    choices = data.get("userChoices")
-    if choices is not None and only_keys(e, "userChoices", choices, {"internet", "podNetwork"}):
-        for key, value in choices.items():
-            if not isinstance(value, bool):
-                e.add(f"userChoices.{key}", "must be true or false")
+    check_network(e, data)
     wl = data.get("workload")
     if runtime == "kubernetes" and wl is None:
         e.add("workload", "runtime 'kubernetes' requires 'workload'")

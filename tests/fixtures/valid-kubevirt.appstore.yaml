@@ -10,8 +10,9 @@ vm:
   bounds:
     cpuCores: { min: 2, max: 8 }
     memoryGiB: { min: 4, max: 16 }
-egress: internet
-userChoices: { internet: true, podNetwork: true }
+network:
+  internet: { allowed: true, default: true }
+  podNetwork: { allowed: true, default: false }
 access:
   - { type: url, template: "https://{workload}-{deployment}.{domain}" }
   - { type: password, from: generated-password, username: "{user}" }

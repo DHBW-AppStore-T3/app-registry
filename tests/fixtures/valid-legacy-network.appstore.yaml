@@ -1,0 +1,26 @@
+# An app up to v2.x: egress / podNetwork / userChoices instead of the network block. Still valid.
+apiVersion: appstore/v2
+name: demo-ide
+runtime: kubernetes
+scope: team
+workload:
+  containers:
+    - name: ide
+      image: ghcr.io/dhbw-appstore-t3/apps/demo-ide@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      expose:
+        port: 8080
+        path: /
+      resources:
+        cpu: 500m
+        memory: 1Gi
+      writablePaths:
+        - /tmp
+  storage:
+    size: 5Gi
+    mountPath: /home/project
+egress: internet
+podNetwork: namespace
+userChoices: { internet: true, podNetwork: true }
+access:
+  - type: url
+    template: "https://{workload}.{zone}.{domain}/"

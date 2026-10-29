@@ -23,6 +23,7 @@ VALUES: list[Any] = [
 ]
 KEYS = ["x", "name", "from", "value", "expose", "mountPath", "type", "path", "size"]
 BOUNDS_KEYS = ["resourceBounds", "cpu", "memory", "min", "max"]
+NETWORK_KEYS = ["network", "internet", "podNetwork", "allowed", "default", "egress", "userChoices"]
 VM_KEYS = ["vm", "bounds", "cpuCores", "memoryGiB", "diskGiB", "imageRef", "imageNamespace", "storageClass", "vncAccess"]
 
 

@@ -20,12 +20,12 @@ Die Registry ist eine Uebersicht fuer das Team. Sie ist **nicht** die Quelle der
 | App | Runtime | Hinweis |
 |---|---|---|
 | pgadmin | pods | zwei Container (pgAdmin + PostgreSQL/Pagila), Team-Scope |
-| jupyter-notebook | pods | JupyterLab pro Person, Egress `internet` |
+| jupyter-notebook | pods | JupyterLab pro Person; Internet waehlbar (Standard aus: nur `pip install`) |
 | web-latex | pods | Editor pro Person, optionale Starter-ZIP |
 | online-ide | pods | code-server pro Person, optionale Aufgaben-ZIP |
 | java-ide | pods | code-server mit JDK 21 und Maven pro Person |
 | template-app | pods | Vorlage (nginx) |
-| ubuntu-app | pods | Web-Terminal (ttyd) pro Person, ohne sudo; GNU-Userland, Egress `internet` |
+| ubuntu-app | pods | Web-Terminal (ttyd) pro Person, ohne sudo; GNU-Userland; Internet waehlbar (Standard aus: Beispiele mit `curl`) |
 | windows-matlab-app | kubevirt-vm | in Entwicklung (`status: development`): Windows 11 mit MATLAB als VM pro Person (Golden-Image), Zugang per noVNC; vCPU/RAM und Netzwerk im Wizard waehlbar |
 
 Die Version einer App ist ihr neuester Git-Tag im App-Repo: den reicht man im AppStore ein, und `rescan-images.yml` prueft das Image dieses Tags. Hier stehen bewusst keine Versionsnummern, sie veralten mit jedem Release.
@@ -44,7 +44,25 @@ Der Vertrag ist `apiVersion: appstore/v2`. Wichtigste Regeln (die Quelle ist `ap
 - `image` muss mit **Digest** gepinnt sein, Tags sind verboten, nur Registry-Praefix `ghcr.io/dhbw-appstore-t3/` erlaubt. Konvention fuer App-Images: `ghcr.io/dhbw-appstore-t3/apps/<app>@sha256:<64 hex>` (die Plattform-Images `backend`, `worker`, `frontend` liegen eine Ebene darueber).
 - Genau ein Container hat `expose` (Port 1024-65535). `expose.path` ist die **Ingress-Route** (Prefix-Match), kein Startpfad: nur dieser Pfad und alles darunter erreicht die App, normalerweise also `/`. Der Validator warnt bei allem anderen. Max. 3 Container, Storage max. 20 Gi, je Container max. 4 CPU / 8192 Mi (Obergrenzen der Plattform, `podApps.maxCpu/maxMemory` im Helm-Chart; Stand dieses Repos: siehe Hinweis unten).
 - Optional `resourceBounds` je Container (`cpu` und `memory` mit `min`/`max`): der Bereich, aus dem Nutzer beim Deployen waehlen; `resources` sind der Standardwert und muessen darin liegen, `max` darf die Obergrenzen nicht uebersteigen.
-- `egress: none` (Default) oder `internet`.
+- `network` (optional, Standard: nichts erlaubt): was die Pods erreichen duerfen und was die Person beim Deployen im Wizard aendern darf. Zwei Einstellungen, jede mit denselben zwei Feldern (beide Standard `false`):
+
+  ```yaml
+  network:
+    internet:   { allowed: true, default: false }   # Internet ueber TCP 80/443 (nie Cluster, Nodes, private Bereiche)
+    podNetwork: { allowed: true, default: false }   # die Pods dieses Deployments untereinander (TCP und UDP, jeder Port)
+  ```
+
+  | `allowed` | `default` | Bedeutung |
+  |---|---|---|
+  | `false` | `false` | nie verfuegbar (nichts angeboten) |
+  | `false` | `true` | immer an, keine Wahl |
+  | `true` | `false` | Wahl im Wizard, startet aus |
+  | `true` | `true` | Wahl im Wizard, startet an |
+
+  Zwei Booleans decken alle vier Faelle ab, ohne ungueltige Kombination. Welche Einstellung ein Wizard-Schalter bekommt und mit welchem Wert er startet, legt allein die App fest; die Plattform nimmt nur Werte fuer Einstellungen an, die `allowed: true` haben.
+  - `internet: { allowed: true, default: true }` fuer Apps, die ohne Internet nicht arbeiten koennen (Paketquellen wie Maven Central, npm, Lizenzserver), `default: false` wo es nur bequem ist (`pip install`), kein `allowed` wo die App nichts nachlaedt. Entscheidend ist, was die App tatsaechlich tut, nicht was sie koennte.
+  - `podNetwork` erlaubt Programmen der Studierenden, sich zu erreichen: eigene TCP-/UDP-Server und -Clients zwischen den Pods **desselben Deployments**, nirgends sonst. Jeder Pod ist unter seinem Namen (`<workload>`) auffindbar, alle zusammen unter `peers` (DNS liefert die Adressen aller Pods; wer "alle erreichen" will, sendet an jede). Einen echten Layer-2-Broadcast (`255.255.255.255`, Multicast, `ff02::1`) gibt es nicht: er erreichte die Pods aller Deployments des Nodes und wird deshalb verworfen.
+  - Die aelteren Schluessel `egress: none|internet`, `podNetwork: none|namespace` und `userChoices: {internet, podNetwork}` (Apps bis v2.x) werden weiter gelesen und bedeuten dasselbe; zusammen mit `network:` sind sie ein Fehler.
 
 Beispiel: [`tests/fixtures/valid.appstore.yaml`](tests/fixtures/valid.appstore.yaml). Lokal pruefen:
 
