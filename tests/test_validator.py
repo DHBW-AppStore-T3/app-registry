@@ -296,6 +296,27 @@ class NetworkBlock(unittest.TestCase):
             self.assertEqual(locs(doc), {"network"})
 
 
+class ScopeChoice(unittest.TestCase):
+    """``scopeChoice``: the person deploying may choose one workload per person or per team (``scope`` is the default)."""
+
+    def doc(self, **over):
+        doc = load("valid.appstore.yaml")
+        doc.update(over)
+        return doc
+
+    def test_it_is_optional_and_a_boolean(self):
+        self.assertEqual(locs(self.doc()), set())
+        for value in (True, False):
+            self.assertEqual(locs(self.doc(scope="user", scopeChoice=value)), set())
+
+    def test_anything_but_a_boolean_is_refused_with_its_path(self):
+        for value in ("yes", 1, None, ["user"]):
+            self.assertEqual(locs(self.doc(scopeChoice=value)), {"scopeChoice"}, repr(value))
+
+    def test_the_default_scope_is_still_checked(self):
+        self.assertEqual(locs(self.doc(scope="everyone", scopeChoice=True)), {"scope"})
+
+
 class YamlLimits(unittest.TestCase):
     """The same three rules as the backend's safe_yaml: size, aliases, nesting."""
 
